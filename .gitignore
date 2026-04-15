@@ -1,0 +1,13 @@
+.envrc
+.direnv/
+.env
+.env.*
+*.local
+
+*.pem
+*.key
+
+*~
+.DS_Store
+
+docs/research/.~lock.*

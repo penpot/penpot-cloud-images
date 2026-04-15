@@ -1,0 +1,218 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Penpot single-node deployment using a prebuilt AMI
+
+Parameters:
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Description: AMI ID for the Penpot single-node image
+
+  InstanceType:
+    Type: String
+    Default: t3.medium
+    AllowedValues:
+      - t3.medium
+      - t3.large
+      - t3.xlarge
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Existing EC2 key pair for host access
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+
+  SshCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR allowed to connect over SSH
+
+  PenpotPublicUri:
+    Type: String
+    Default: ""
+    Description: Optional public URL used by Penpot. Leave empty in test mode to derive it from the EC2 public DNS.
+
+  PenpotSecretKey:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+    Description: Random secret used by Penpot sessions and tokens
+
+  PenpotVersion:
+    Type: String
+    Default: latest
+
+  DeploymentMode:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+      - test
+    Description: Deployment behavior. Use production for normal email-based flows and test to disable email verification.
+
+  PenpotEnableSmtp:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Enable SMTP support in Penpot
+
+  PenpotSmtpDefaultFrom:
+    Type: String
+    Default: no-reply@example.com
+    Description: Default From email address used by Penpot
+
+  PenpotSmtpDefaultReplyTo:
+    Type: String
+    Default: no-reply@example.com
+    Description: Default Reply-To email address used by Penpot
+
+  PenpotSmtpHost:
+    Type: String
+    Default: ""
+    Description: SMTP server hostname
+
+  PenpotSmtpPort:
+    Type: Number
+    Default: 587
+    Description: SMTP server port
+
+  PenpotSmtpUsername:
+    Type: String
+    Default: ""
+    Description: SMTP username
+
+  PenpotSmtpPassword:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: SMTP password
+
+  PenpotSmtpTls:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Enable STARTTLS for SMTP connections
+
+  PenpotSmtpSsl:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Enable implicit SSL for SMTP connections
+
+Mappings: {}
+
+Resources:
+  PenpotSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access for Penpot single-node
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: penpot-cloud-image-aws-sg
+        - Key: Project
+          Value: penpot-cloud-image-aws
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Repository
+          Value: penpot-cloud-images
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SshCidr
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  PenpotInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref PenpotSecurityGroup
+          SubnetId: !Ref SubnetId
+      Tags:
+        - Key: Name
+          Value: penpot-cloud-image-aws
+        - Key: Project
+          Value: penpot-cloud-image-aws
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Repository
+          Value: penpot-cloud-images
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+
+          PENPOT_PUBLIC_URI_INPUT='${PenpotPublicUri}'
+          if [[ -z "$PENPOT_PUBLIC_URI_INPUT" ]]; then
+            TOKEN=$(curl -fsSL -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+            PUBLIC_HOSTNAME=$(curl -fsSL -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-hostname)
+            if [[ -n "$PUBLIC_HOSTNAME" ]]; then
+              export PENPOT_PUBLIC_URI="http://$PUBLIC_HOSTNAME"
+            else
+              PUBLIC_IP=$(curl -fsSL -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
+              export PENPOT_PUBLIC_URI="http://$PUBLIC_IP"
+            fi
+          else
+            export PENPOT_PUBLIC_URI="$PENPOT_PUBLIC_URI_INPUT"
+          fi
+
+          export PENPOT_SECRET_KEY='${PenpotSecretKey}'
+          export PENPOT_VERSION='${PenpotVersion}'
+          export PENPOT_FLAGS=''
+          if [[ '${DeploymentMode}' == 'test' ]]; then
+            export PENPOT_FLAGS='disable-email-verification'
+          fi
+          if [[ '${PenpotEnableSmtp}' == 'true' ]]; then
+            if [[ -n "$PENPOT_FLAGS" ]]; then
+              export PENPOT_FLAGS="$PENPOT_FLAGS enable-smtp"
+            else
+              export PENPOT_FLAGS='enable-smtp'
+            fi
+          fi
+          export PENPOT_SMTP_DEFAULT_FROM='${PenpotSmtpDefaultFrom}'
+          export PENPOT_SMTP_DEFAULT_REPLY_TO='${PenpotSmtpDefaultReplyTo}'
+          export PENPOT_SMTP_HOST='${PenpotSmtpHost}'
+          export PENPOT_SMTP_PORT='${PenpotSmtpPort}'
+          export PENPOT_SMTP_USERNAME='${PenpotSmtpUsername}'
+          export PENPOT_SMTP_PASSWORD='${PenpotSmtpPassword}'
+          export PENPOT_SMTP_TLS='${PenpotSmtpTls}'
+          export PENPOT_SMTP_SSL='${PenpotSmtpSsl}'
+
+          /opt/penpot/bin/configure-penpot.sh
+          systemctl enable penpot-compose
+          systemctl restart penpot-compose
+          systemctl restart nginx
+
+Outputs:
+  InstanceId:
+    Value: !Ref PenpotInstance
+
+  PublicIp:
+    Value: !GetAtt PenpotInstance.PublicIp
+
+  PublicDnsName:
+    Value: !GetAtt PenpotInstance.PublicDnsName
+
+  PenpotUrl:
+    Value: !Sub "http://${PenpotInstance.PublicIp}"

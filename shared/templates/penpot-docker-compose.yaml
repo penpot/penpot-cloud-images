@@ -1,0 +1,93 @@
+services:
+  penpot-frontend:
+    image: "penpotapp/frontend:${PENPOT_VERSION:-latest}"
+    restart: always
+    ports:
+      - "127.0.0.1:9001:8080"
+    volumes:
+      - penpot_assets:/opt/data/assets
+    depends_on:
+      - penpot-backend
+      - penpot-exporter
+    environment:
+      PENPOT_FLAGS: "${PENPOT_FLAGS:-enable-prepl-server}"
+      PENPOT_HTTP_SERVER_MAX_BODY_SIZE: "${PENPOT_HTTP_SERVER_MAX_BODY_SIZE:-367001600}"
+      PENPOT_HTTP_SERVER_MAX_MULTIPART_BODY_SIZE: "${PENPOT_HTTP_SERVER_MAX_MULTIPART_BODY_SIZE:-367001600}"
+
+  penpot-backend:
+    image: "penpotapp/backend:${PENPOT_VERSION:-latest}"
+    restart: always
+    volumes:
+      - penpot_assets:/opt/data/assets
+    depends_on:
+      penpot-postgres:
+        condition: service_healthy
+      penpot-valkey:
+        condition: service_healthy
+    environment:
+      PENPOT_FLAGS: "${PENPOT_FLAGS:-enable-prepl-server}"
+      PENPOT_PUBLIC_URI: "${PENPOT_PUBLIC_URI}"
+      PENPOT_HTTP_SERVER_MAX_BODY_SIZE: "${PENPOT_HTTP_SERVER_MAX_BODY_SIZE:-367001600}"
+      PENPOT_HTTP_SERVER_MAX_MULTIPART_BODY_SIZE: "${PENPOT_HTTP_SERVER_MAX_MULTIPART_BODY_SIZE:-367001600}"
+      PENPOT_SECRET_KEY: "${PENPOT_SECRET_KEY}"
+      PENPOT_DATABASE_URI: "${PENPOT_DATABASE_URI:-postgresql://penpot-postgres/penpot}"
+      PENPOT_DATABASE_USERNAME: "${PENPOT_DATABASE_USERNAME:-penpot}"
+      PENPOT_DATABASE_PASSWORD: "${PENPOT_DATABASE_PASSWORD:-penpot}"
+      PENPOT_REDIS_URI: "${PENPOT_REDIS_URI:-redis://penpot-valkey/0}"
+      PENPOT_OBJECTS_STORAGE_BACKEND: "${PENPOT_OBJECTS_STORAGE_BACKEND:-fs}"
+      PENPOT_OBJECTS_STORAGE_FS_DIRECTORY: "${PENPOT_OBJECTS_STORAGE_FS_DIRECTORY:-/opt/data/assets}"
+      PENPOT_TELEMETRY_ENABLED: "${PENPOT_TELEMETRY_ENABLED:-true}"
+      PENPOT_TELEMETRY_REFERER: "${PENPOT_TELEMETRY_REFERER:-aws}"
+      PENPOT_SMTP_DEFAULT_FROM: "${PENPOT_SMTP_DEFAULT_FROM:-no-reply@example.com}"
+      PENPOT_SMTP_DEFAULT_REPLY_TO: "${PENPOT_SMTP_DEFAULT_REPLY_TO:-no-reply@example.com}"
+      PENPOT_SMTP_HOST: "${PENPOT_SMTP_HOST:-}"
+      PENPOT_SMTP_PORT: "${PENPOT_SMTP_PORT:-587}"
+      PENPOT_SMTP_USERNAME: "${PENPOT_SMTP_USERNAME:-}"
+      PENPOT_SMTP_PASSWORD: "${PENPOT_SMTP_PASSWORD:-}"
+      PENPOT_SMTP_TLS: "${PENPOT_SMTP_TLS:-true}"
+      PENPOT_SMTP_SSL: "${PENPOT_SMTP_SSL:-false}"
+
+  penpot-exporter:
+    image: "penpotapp/exporter:${PENPOT_VERSION:-latest}"
+    restart: always
+    depends_on:
+      penpot-valkey:
+        condition: service_healthy
+    environment:
+      PENPOT_SECRET_KEY: "${PENPOT_SECRET_KEY}"
+      PENPOT_PUBLIC_URI: "http://penpot-frontend:8080"
+      PENPOT_REDIS_URI: "${PENPOT_REDIS_URI:-redis://penpot-valkey/0}"
+
+  penpot-postgres:
+    image: "postgres:15"
+    restart: always
+    stop_signal: SIGINT
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U penpot"]
+      interval: 2s
+      timeout: 10s
+      retries: 5
+      start_period: 2s
+    volumes:
+      - penpot_postgres_v15:/var/lib/postgresql/data
+    environment:
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      POSTGRES_DB: "penpot"
+      POSTGRES_USER: "penpot"
+      POSTGRES_PASSWORD: "penpot"
+
+  penpot-valkey:
+    image: "valkey/valkey:8.1"
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
+      interval: 1s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    environment:
+      VALKEY_EXTRA_FLAGS: "--maxmemory 128mb --maxmemory-policy volatile-lfu"
+
+volumes:
+  penpot_postgres_v15:
+  penpot_assets:
