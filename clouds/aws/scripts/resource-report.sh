@@ -21,7 +21,7 @@ fi
 
 PROFILE="${AWS_PROFILE:-${1:-}}"
 REGION="${AWS_REGION:-${2:-eu-west-1}}"
-PROJECT_TAG="penpot-cloud-image-aws"
+PROJECT_TAG="${PROJECT_TAG:-penpot-cloud-image-aws}"
 
 if [[ -z "${PROFILE}" ]]; then
   echo "usage: AWS_PROFILE=<profile> $0 [profile] [region]" >&2

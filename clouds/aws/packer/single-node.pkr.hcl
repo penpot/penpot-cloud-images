@@ -22,6 +22,11 @@ variable "ami_name_prefix" {
   default = "penpot-cloud-image-aws"
 }
 
+variable "project_tag" {
+  type    = string
+  default = "penpot-cloud-image-aws"
+}
+
 variable "vpc_id" {
   type    = string
   default = ""
@@ -43,20 +48,20 @@ source "amazon-ebs" "al2023" {
   temporary_security_group_source_cidrs = ["0.0.0.0/0"]
 
   tags = {
-    Project     = "penpot-cloud-image-aws"
+    Project     = var.project_tag
     ManagedBy   = "packer"
     Repository  = "penpot-cloud-images"
   }
 
   run_tags = {
     Name        = "penpot-cloud-image-aws-builder"
-    Project     = "penpot-cloud-image-aws"
+    Project     = var.project_tag
     ManagedBy   = "packer"
     Repository  = "penpot-cloud-images"
   }
 
   snapshot_tags = {
-    Project     = "penpot-cloud-image-aws"
+    Project     = var.project_tag
     ManagedBy   = "packer"
     Repository  = "penpot-cloud-images"
   }

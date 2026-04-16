@@ -16,7 +16,7 @@ AWS_PROFILE=<profile>
 AWS_REGION=<region>
 ```
 
-## Identidad
+## Caller Identity
 
 ```bash
 AWS_PROFILE=<profile> aws sts get-caller-identity

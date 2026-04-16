@@ -2,6 +2,8 @@
 
 Operational helper scripts for the current `AWS` delivery flow.
 
+Both scripts use `PROJECT_TAG=penpot-cloud-image-aws` by default, but allow a temporary override through the `PROJECT_TAG` environment variable when needed.
+
 ## Scripts
 
 - `resource-report.sh`
