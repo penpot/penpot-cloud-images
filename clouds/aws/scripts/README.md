@@ -2,7 +2,7 @@
 
 Operational helper scripts for the current `AWS` delivery flow.
 
-Both scripts use `PROJECT_TAG=penpot-cloud-image-aws` by default, but allow a temporary override through the `PROJECT_TAG` environment variable when needed.
+`resource-report.sh` and `cleanup.sh` use `PROJECT_TAG=penpot-cloud-image-aws` by default, but allow a temporary override through the `PROJECT_TAG` environment variable when needed.
 
 ## Scripts
 
@@ -12,9 +12,14 @@ Both scripts use `PROJECT_TAG=penpot-cloud-image-aws` by default, but allow a te
 - `cleanup.sh`
   Cleans project resources in `AWS` and prints the state before and after cleanup.
 
+- `validate.sh`
+  Runs lightweight static validation for the AWS delivery assets without creating resources.
+
 ## Typical Usage
 
 ```bash
 AWS_PROFILE=<profile> ./clouds/aws/scripts/resource-report.sh
 AWS_PROFILE=<profile> ./clouds/aws/scripts/cleanup.sh
+bash ./clouds/aws/scripts/validate.sh
+bash ./clouds/aws/scripts/validate.sh --help
 ```

@@ -38,32 +38,32 @@ variable "subnet_id" {
 }
 
 source "amazon-ebs" "al2023" {
-  region                    = var.aws_region
-  instance_type             = var.instance_type
-  ssh_username              = "ec2-user"
-  ami_name                  = "${var.ami_name_prefix}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
-  vpc_id                    = var.vpc_id != "" ? var.vpc_id : null
-  subnet_id                 = var.subnet_id != "" ? var.subnet_id : null
-  associate_public_ip_address = true
+  region                                = var.aws_region
+  instance_type                         = var.instance_type
+  ssh_username                          = "ec2-user"
+  ami_name                              = "${var.ami_name_prefix}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+  vpc_id                                = var.vpc_id != "" ? var.vpc_id : null
+  subnet_id                             = var.subnet_id != "" ? var.subnet_id : null
+  associate_public_ip_address           = true
   temporary_security_group_source_cidrs = ["0.0.0.0/0"]
 
   tags = {
-    Project     = var.project_tag
-    ManagedBy   = "packer"
-    Repository  = "penpot-cloud-images"
+    Project    = var.project_tag
+    ManagedBy  = "packer"
+    Repository = "penpot-cloud-images"
   }
 
   run_tags = {
-    Name        = "penpot-cloud-image-aws-builder"
-    Project     = var.project_tag
-    ManagedBy   = "packer"
-    Repository  = "penpot-cloud-images"
+    Name       = "penpot-cloud-image-aws-builder"
+    Project    = var.project_tag
+    ManagedBy  = "packer"
+    Repository = "penpot-cloud-images"
   }
 
   snapshot_tags = {
-    Project     = var.project_tag
-    ManagedBy   = "packer"
-    Repository  = "penpot-cloud-images"
+    Project    = var.project_tag
+    ManagedBy  = "packer"
+    Repository = "penpot-cloud-images"
   }
 
   source_ami_filter {

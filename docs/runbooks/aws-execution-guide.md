@@ -88,6 +88,16 @@ export AWS_KEY_NAME="<key-pair-name>"
 
 ## 5. Build The AMI With Packer
 
+Before creating resources, you can run the lightweight validation helper:
+
+```bash
+bash clouds/aws/scripts/validate.sh
+```
+
+This checks script syntax, validates the `Packer` template, and runs `CloudFormation` template validation without launching resources.
+
+## 6. Build The AMI With Packer
+
 Run the build from the repository root:
 
 ```bash
@@ -101,7 +111,7 @@ packer build \
 
 When the build succeeds, note the generated `AMI ID`.
 
-## 6. Export The New AMI ID
+## 7. Export The New AMI ID
 
 Keep the latest built `AMI ID` in the current shell:
 
@@ -122,7 +132,7 @@ In that case:
 export AWS_AMI_ID="ami-0123456789abcdef0"
 ```
 
-## 7. Launch The CloudFormation Stack
+## 8. Launch The CloudFormation Stack
 
 Create the stack using the AMI you just built:
 
@@ -143,7 +153,7 @@ aws cloudformation create-stack \
     ParameterKey=DeploymentMode,ParameterValue=test
 ```
 
-## 8. Inspect Resources During Validation
+## 9. Inspect Resources During Validation
 
 Use the repository helper to check the current AWS resources:
 
@@ -151,7 +161,7 @@ Use the repository helper to check the current AWS resources:
 ./clouds/aws/scripts/resource-report.sh
 ```
 
-## 9. Get The Public IP Or URL
+## 10. Get The Public IP Or URL
 
 Once the stack reaches a healthy state, inspect its outputs:
 
@@ -165,7 +175,7 @@ aws cloudformation describe-stacks \
 
 The returned outputs include the public IP and the derived access URL.
 
-## 10. Clean Up Test Resources
+## 11. Clean Up Test Resources
 
 When validation is complete:
 

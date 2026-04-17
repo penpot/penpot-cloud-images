@@ -34,6 +34,7 @@ The current `AWS` implementation covers:
 
 - AWS Packer template: `clouds/aws/packer/single-node.pkr.hcl`
 - AWS CloudFormation template: `clouds/aws/cloudformation/penpot-single-node.yaml`
+- AWS validation helper: `clouds/aws/scripts/validate.sh`
 - AWS scripts guide: `clouds/aws/scripts/README.md`
 - AWS scripts: `clouds/aws/scripts/resource-report.sh`, `clouds/aws/scripts/cleanup.sh`
 - Shared scripts: `shared/scripts/`
