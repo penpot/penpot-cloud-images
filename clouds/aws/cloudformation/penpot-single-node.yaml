@@ -1,6 +1,77 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Penpot single-node deployment using a prebuilt AMI
 
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: EC2 Launch Configuration
+        Parameters:
+          - AmiId
+          - InstanceType
+          - KeyName
+          - VpcId
+          - SubnetId
+          - SshCidr
+      - Label:
+          default: Penpot Application Configuration
+        Parameters:
+          - PenpotPublicUri
+          - PenpotSecretKey
+          - PenpotVersion
+          - DeploymentMode
+      - Label:
+          default: SMTP Configuration
+        Parameters:
+          - PenpotEnableSmtp
+          - PenpotSmtpDefaultFrom
+          - PenpotSmtpDefaultReplyTo
+          - PenpotSmtpHost
+          - PenpotSmtpPort
+          - PenpotSmtpUsername
+          - PenpotSmtpPassword
+          - PenpotSmtpTls
+          - PenpotSmtpSsl
+    ParameterLabels:
+      AmiId:
+        default: Penpot AMI ID
+      InstanceType:
+        default: EC2 Instance Type
+      KeyName:
+        default: EC2 Key Pair
+      VpcId:
+        default: VPC
+      SubnetId:
+        default: Subnet
+      SshCidr:
+        default: SSH Access CIDR
+      PenpotPublicUri:
+        default: Penpot Public URI
+      PenpotSecretKey:
+        default: Penpot Secret Key
+      PenpotVersion:
+        default: Penpot Version
+      DeploymentMode:
+        default: Deployment Mode
+      PenpotEnableSmtp:
+        default: Enable SMTP
+      PenpotSmtpDefaultFrom:
+        default: Default From Address
+      PenpotSmtpDefaultReplyTo:
+        default: Default Reply-To Address
+      PenpotSmtpHost:
+        default: SMTP Host
+      PenpotSmtpPort:
+        default: SMTP Port
+      PenpotSmtpUsername:
+        default: SMTP Username
+      PenpotSmtpPassword:
+        default: SMTP Password
+      PenpotSmtpTls:
+        default: Use STARTTLS
+      PenpotSmtpSsl:
+        default: Use SSL
+
 Parameters:
   AmiId:
     Type: AWS::EC2::Image::Id
@@ -9,6 +80,7 @@ Parameters:
   InstanceType:
     Type: String
     Default: t3.medium
+    Description: EC2 instance type used for the Penpot host
     AllowedValues:
       - t3.medium
       - t3.large
@@ -20,14 +92,17 @@ Parameters:
 
   VpcId:
     Type: AWS::EC2::VPC::Id
+    Description: VPC where the Penpot instance will be launched
 
   SubnetId:
     Type: AWS::EC2::Subnet::Id
+    Description: Public subnet where the Penpot instance will be launched
 
   SshCidr:
     Type: String
-    Default: 0.0.0.0/0
-    Description: CIDR allowed to connect over SSH
+    Description: CIDR block allowed to connect to the instance over SSH. Required to avoid exposing SSH to the whole internet by default
+    AllowedPattern: ^(?:((?:25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])/(?:3[0-2]|[12]?[0-9]))$
+    ConstraintDescription: Must be a valid IPv4 CIDR block such as 203.0.113.10/32
 
   PenpotPublicUri:
     Type: String
@@ -39,10 +114,12 @@ Parameters:
     NoEcho: true
     MinLength: 32
     Description: Random secret used by Penpot sessions and tokens
+    ConstraintDescription: Must be at least 32 characters long
 
   PenpotVersion:
     Type: String
     Default: latest
+    Description: Penpot container image version to deploy
 
   DeploymentMode:
     Type: String
@@ -73,7 +150,7 @@ Parameters:
   PenpotSmtpHost:
     Type: String
     Default: ""
-    Description: SMTP server hostname
+    Description: SMTP server hostname. Leave empty if SMTP is disabled
 
   PenpotSmtpPort:
     Type: Number
@@ -83,13 +160,13 @@ Parameters:
   PenpotSmtpUsername:
     Type: String
     Default: ""
-    Description: SMTP username
+    Description: SMTP username. Leave empty if SMTP is disabled
 
   PenpotSmtpPassword:
     Type: String
     Default: ""
     NoEcho: true
-    Description: SMTP password
+    Description: SMTP password. Leave empty if SMTP is disabled
 
   PenpotSmtpTls:
     Type: String
@@ -108,6 +185,20 @@ Parameters:
     Description: Enable implicit SSL for SMTP connections
 
 Mappings: {}
+
+Conditions:
+  HasPenpotPublicUri: !Not [!Equals [!Ref PenpotPublicUri, ""]]
+
+Rules:
+  SmtpSettingsRequiredWhenEnabled:
+    RuleCondition: !Equals [!Ref PenpotEnableSmtp, "true"]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref PenpotSmtpHost, ""]]
+        AssertDescription: PenpotSmtpHost must be provided when SMTP is enabled
+      - Assert: !Not [!Equals [!Ref PenpotSmtpUsername, ""]]
+        AssertDescription: PenpotSmtpUsername must be provided when SMTP is enabled
+      - Assert: !Not [!Equals [!Ref PenpotSmtpPassword, ""]]
+        AssertDescription: PenpotSmtpPassword must be provided when SMTP is enabled
 
 Resources:
   PenpotSecurityGroup:
@@ -206,13 +297,38 @@ Resources:
 
 Outputs:
   InstanceId:
+    Description: EC2 instance ID for the Penpot host
     Value: !Ref PenpotInstance
 
   PublicIp:
+    Description: Public IPv4 address assigned to the Penpot host
     Value: !GetAtt PenpotInstance.PublicIp
 
   PublicDnsName:
+    Description: Public DNS name assigned to the Penpot host
     Value: !GetAtt PenpotInstance.PublicDnsName
 
   PenpotUrl:
-    Value: !Sub "http://${PenpotInstance.PublicIp}"
+    Description: URL expected to expose the Penpot application after startup
+    Value: !If
+      - HasPenpotPublicUri
+      - !Ref PenpotPublicUri
+      - !Sub "http://${PenpotInstance.PublicIp}"
+
+  PenpotAccessHost:
+    Description: Preferred host value to use for HTTP access and host-level troubleshooting
+    Value: !If
+      - HasPenpotPublicUri
+      - !Select
+        - 2
+        - !Split
+          - /
+          - !Ref PenpotPublicUri
+      - !GetAtt PenpotInstance.PublicIp
+
+  PenpotAccessUri:
+    Description: URI value to use when accessing Penpot from a browser
+    Value: !If
+      - HasPenpotPublicUri
+      - !Ref PenpotPublicUri
+      - !Sub "http://${PenpotInstance.PublicIp}"

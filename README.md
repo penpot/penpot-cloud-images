@@ -43,10 +43,9 @@ The current `AWS` implementation covers:
 
 ## Documentation
 
-- [AWS Execution Guide](docs/runbooks/aws-execution-guide.md)
-- [Single-Node Scope](docs/architecture/single-node-scope.md)
-- [Cleanup Checklist](docs/checklists/cleanup-checklist.md)
-- [AWS Commands Cheatsheet](docs/runbooks/aws-commands-cheatsheet.md)
+- [AWS Execution Guide](docs/aws/execution-guide.md)
+- [Cleanup Checklist](docs/aws/cleanup-checklist.md)
+- [AWS Commands Cheatsheet](docs/aws/commands-cheatsheet.md)
 
 ## Current Build Flow
 

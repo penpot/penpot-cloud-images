@@ -2,7 +2,7 @@
 
 This guide describes the current manual execution flow for the `AWS` implementation in this repository, starting from a local machine with `AWS CLI`, `Packer`, and repository access already available.
 
-For lower-level lookup commands, see [AWS Commands Cheatsheet](aws-commands-cheatsheet.md).
+For lower-level lookup commands, see [AWS Commands Cheatsheet](commands-cheatsheet.md).
 
 ## 1. Discover Your Local AWS Profile
 
@@ -44,16 +44,31 @@ export PROJECT_TAG="<project-tag>"
 
 Recommended lookup commands:
 
-- profile list: [AWS Commands Cheatsheet](aws-commands-cheatsheet.md#caller-identity)
-- VPCs: [AWS Commands Cheatsheet](aws-commands-cheatsheet.md#vpcs)
-- subnets: [AWS Commands Cheatsheet](aws-commands-cheatsheet.md#subnets)
-- key pairs: [AWS Commands Cheatsheet](aws-commands-cheatsheet.md#key-pairs)
+- profile list: [AWS Commands Cheatsheet](commands-cheatsheet.md#caller-identity)
+- VPCs: [AWS Commands Cheatsheet](commands-cheatsheet.md#vpcs)
+- subnets: [AWS Commands Cheatsheet](commands-cheatsheet.md#subnets)
+- key pairs: [AWS Commands Cheatsheet](commands-cheatsheet.md#key-pairs)
 
 Recommended example:
 
 ```bash
 export AWS_STACK_NAME="penpot-cloud-image-aws-demo"
 export PROJECT_TAG="penpot-cloud-image-aws"
+export AWS_SSH_CIDR="203.0.113.10/32"
+```
+
+Replace `203.0.113.10/32` with the public IPv4 CIDR that should be allowed to reach the instance over SSH.
+
+You can discover your current public IPv4 with:
+
+```bash
+curl -fsSL https://checkip.amazonaws.com
+```
+
+Then export it as a `/32` CIDR, for example:
+
+```bash
+export AWS_SSH_CIDR="203.0.113.10/32"
 ```
 
 This example name is only intended for the current manual testing flow. It is not meant to define the final long-term stack naming convention.
@@ -147,7 +162,7 @@ aws cloudformation create-stack \
     ParameterKey=KeyName,ParameterValue="$AWS_KEY_NAME" \
     ParameterKey=VpcId,ParameterValue="$AWS_VPC_ID" \
     ParameterKey=SubnetId,ParameterValue="$AWS_SUBNET_ID" \
-    ParameterKey=SshCidr,ParameterValue=0.0.0.0/0 \
+    ParameterKey=SshCidr,ParameterValue="$AWS_SSH_CIDR" \
     ParameterKey=PenpotSecretKey,ParameterValue=$(openssl rand -hex 32) \
     ParameterKey=PenpotVersion,ParameterValue=latest \
     ParameterKey=DeploymentMode,ParameterValue=test
@@ -161,7 +176,23 @@ Use the repository helper to check the current AWS resources:
 ./clouds/aws/scripts/resource-report.sh
 ```
 
-## 10. Get The Public IP Or URL
+## 10. Update An Existing Test Stack
+
+If you changed the `CloudFormation` template and want to reuse the same test stack and parameters, update it with:
+
+```bash
+aws cloudformation update-stack   --region "$AWS_REGION"   --stack-name "$AWS_STACK_NAME"   --template-body file://clouds/aws/cloudformation/penpot-single-node.yaml   --parameters     ParameterKey=AmiId,UsePreviousValue=true     ParameterKey=InstanceType,UsePreviousValue=true     ParameterKey=KeyName,UsePreviousValue=true     ParameterKey=VpcId,UsePreviousValue=true     ParameterKey=SubnetId,UsePreviousValue=true     ParameterKey=SshCidr,UsePreviousValue=true     ParameterKey=PenpotSecretKey,UsePreviousValue=true     ParameterKey=PenpotVersion,UsePreviousValue=true     ParameterKey=DeploymentMode,UsePreviousValue=true
+```
+
+Then wait for the stack update to complete:
+
+```bash
+aws cloudformation wait stack-update-complete   --region "$AWS_REGION"   --stack-name "$AWS_STACK_NAME"
+```
+
+If AWS responds with `No updates are to be performed`, the currently deployed stack already matches the template and parameters sent in the update request.
+
+## 11. Get The Public IP Or URL
 
 Once the stack reaches a healthy state, inspect its outputs:
 
@@ -173,9 +204,11 @@ aws cloudformation describe-stacks \
   --output table
 ```
 
-The returned outputs include the public IP and the derived access URL.
+The returned outputs include the public IP, public DNS name, `PenpotUrl`, `PenpotAccessHost`, and `PenpotAccessUri`.
 
-## 11. Clean Up Test Resources
+For browser access, prefer `PenpotAccessUri`. For host-level checks such as `curl` or SSH troubleshooting, use `PenpotAccessHost` together with the public IP or DNS output shown by the stack.
+
+## 12. Clean Up Test Resources
 
 When validation is complete:
 
