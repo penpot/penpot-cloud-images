@@ -12,14 +12,21 @@ Metadata:
           - KeyName
           - VpcId
           - SubnetId
+          - LoadBalancerSubnetId
           - SshCidr
       - Label:
           default: Penpot Application Configuration
         Parameters:
+          - AccessMode
           - PenpotPublicUri
           - PenpotSecretKey
           - PenpotVersion
           - DeploymentMode
+      - Label:
+          default: HTTPS Configuration
+        Parameters:
+          - DomainName
+          - AcmCertificateArn
       - Label:
           default: SMTP Configuration
         Parameters:
@@ -43,8 +50,12 @@ Metadata:
         default: VPC
       SubnetId:
         default: Subnet
+      LoadBalancerSubnetId:
+        default: ALB Secondary Subnet
       SshCidr:
         default: SSH Access CIDR
+      AccessMode:
+        default: Access Mode
       PenpotPublicUri:
         default: Penpot Public URI
       PenpotSecretKey:
@@ -53,6 +64,10 @@ Metadata:
         default: Penpot Version
       DeploymentMode:
         default: Deployment Mode
+      DomainName:
+        default: Domain Name
+      AcmCertificateArn:
+        default: ACM Certificate ARN
       PenpotEnableSmtp:
         default: Enable SMTP
       PenpotSmtpDefaultFrom:
@@ -98,16 +113,31 @@ Parameters:
     Type: AWS::EC2::Subnet::Id
     Description: Public subnet where the Penpot instance will be launched
 
+  LoadBalancerSubnetId:
+    Type: String
+    Default: ""
+    Description: Second public subnet for the ALB in a different Availability Zone than SubnetId. Required when AccessMode is https-alb
+    AllowedPattern: ^$|^subnet-[0-9a-f]+$
+    ConstraintDescription: Must be empty for http-direct or a valid subnet ID such as subnet-0123456789abcdef0
+
   SshCidr:
     Type: String
     Description: CIDR block allowed to connect to the instance over SSH. Required to avoid exposing SSH to the whole internet by default
     AllowedPattern: ^(?:((?:25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])/(?:3[0-2]|[12]?[0-9]))$
     ConstraintDescription: Must be a valid IPv4 CIDR block such as 203.0.113.10/32
 
+  AccessMode:
+    Type: String
+    Default: http-direct
+    AllowedValues:
+      - http-direct
+      - https-alb
+    Description: Access path exposed to customers. Use http-direct for the current prototype flow or https-alb to expose Penpot through an Application Load Balancer with ACM
+
   PenpotPublicUri:
     Type: String
     Default: ""
-    Description: Optional public URL used by Penpot. Leave empty in test mode to derive it from the EC2 public DNS.
+    Description: Optional public URL used by Penpot. Leave empty to derive it automatically. In https-alb mode, the recommended value is empty so the stack derives https://<DomainName>.
 
   PenpotSecretKey:
     Type: String
@@ -128,6 +158,16 @@ Parameters:
       - production
       - test
     Description: Deployment behavior. Use production for normal email-based flows and test to disable email verification.
+
+  DomainName:
+    Type: String
+    Default: ""
+    Description: Public DNS name used when AccessMode is https-alb. The customer must manage the DNS record for this name and point it to the ALB
+
+  AcmCertificateArn:
+    Type: String
+    Default: ""
+    Description: ACM certificate ARN used by the ALB HTTPS listener when AccessMode is https-alb. The certificate must exist in the same region and cover DomainName
 
   PenpotEnableSmtp:
     Type: String
@@ -188,8 +228,20 @@ Mappings: {}
 
 Conditions:
   HasPenpotPublicUri: !Not [!Equals [!Ref PenpotPublicUri, ""]]
+  UseAlbHttps: !Equals [!Ref AccessMode, https-alb]
 
 Rules:
+  DomainNameRequiredWhenUsingAlbHttps:
+    RuleCondition: !Equals [!Ref AccessMode, https-alb]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref DomainName, ""]]
+        AssertDescription: DomainName must be provided when AccessMode is https-alb
+      - Assert: !Not [!Equals [!Ref AcmCertificateArn, ""]]
+        AssertDescription: AcmCertificateArn must be provided when AccessMode is https-alb
+      - Assert: !Not [!Equals [!Ref LoadBalancerSubnetId, ""]]
+        AssertDescription: LoadBalancerSubnetId must be provided when AccessMode is https-alb
+      - Assert: !Not [!Equals [!Ref LoadBalancerSubnetId, !Ref SubnetId]]
+        AssertDescription: LoadBalancerSubnetId must be different from SubnetId when AccessMode is https-alb
   SmtpSettingsRequiredWhenEnabled:
     RuleCondition: !Equals [!Ref PenpotEnableSmtp, "true"]
     Assertions:
@@ -201,6 +253,34 @@ Rules:
         AssertDescription: PenpotSmtpPassword must be provided when SMTP is enabled
 
 Resources:
+  PenpotLoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: UseAlbHttps
+    Properties:
+      GroupDescription: Public HTTPS access for Penpot through the application load balancer
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: penpot-cloud-image-aws-alb-sg
+        - Key: Project
+          Value: penpot-cloud-image-aws
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Repository
+          Value: penpot-cloud-images
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
   PenpotSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -220,10 +300,16 @@ Resources:
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref SshCidr
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
+        - !If
+          - UseAlbHttps
+          - IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            SourceSecurityGroupId: !Ref PenpotLoadBalancerSecurityGroup
+          - IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -250,50 +336,134 @@ Resources:
         - Key: Repository
           Value: penpot-cloud-images
       UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          set -euxo pipefail
+        Fn::Base64:
+          Fn::Sub:
+            - |
+              #!/bin/bash
+              set -euxo pipefail
 
-          PENPOT_PUBLIC_URI_INPUT='${PenpotPublicUri}'
-          if [[ -z "$PENPOT_PUBLIC_URI_INPUT" ]]; then
-            TOKEN=$(curl -fsSL -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-            PUBLIC_HOSTNAME=$(curl -fsSL -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-hostname)
-            if [[ -n "$PUBLIC_HOSTNAME" ]]; then
-              export PENPOT_PUBLIC_URI="http://$PUBLIC_HOSTNAME"
-            else
-              PUBLIC_IP=$(curl -fsSL -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
-              export PENPOT_PUBLIC_URI="http://$PUBLIC_IP"
-            fi
-          else
-            export PENPOT_PUBLIC_URI="$PENPOT_PUBLIC_URI_INPUT"
-          fi
+              DEFAULT_PENPOT_PUBLIC_URI='${DefaultPenpotPublicUri}'
+              PENPOT_PUBLIC_URI_INPUT='${PenpotPublicUri}'
+              if [[ -z "$PENPOT_PUBLIC_URI_INPUT" ]]; then
+                if [[ -n "$DEFAULT_PENPOT_PUBLIC_URI" ]]; then
+                  export PENPOT_PUBLIC_URI="$DEFAULT_PENPOT_PUBLIC_URI"
+                else
+                  TOKEN=$(curl -fsSL -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+                  PUBLIC_HOSTNAME=$(curl -fsSL -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-hostname)
+                  if [[ -n "$PUBLIC_HOSTNAME" ]]; then
+                    export PENPOT_PUBLIC_URI="http://$PUBLIC_HOSTNAME"
+                  else
+                    PUBLIC_IP=$(curl -fsSL -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
+                    export PENPOT_PUBLIC_URI="http://$PUBLIC_IP"
+                  fi
+                fi
+              else
+                export PENPOT_PUBLIC_URI="$PENPOT_PUBLIC_URI_INPUT"
+              fi
 
-          export PENPOT_SECRET_KEY='${PenpotSecretKey}'
-          export PENPOT_VERSION='${PenpotVersion}'
-          export PENPOT_FLAGS=''
-          if [[ '${DeploymentMode}' == 'test' ]]; then
-            export PENPOT_FLAGS='disable-email-verification'
-          fi
-          if [[ '${PenpotEnableSmtp}' == 'true' ]]; then
-            if [[ -n "$PENPOT_FLAGS" ]]; then
-              export PENPOT_FLAGS="$PENPOT_FLAGS enable-smtp"
-            else
-              export PENPOT_FLAGS='enable-smtp'
-            fi
-          fi
-          export PENPOT_SMTP_DEFAULT_FROM='${PenpotSmtpDefaultFrom}'
-          export PENPOT_SMTP_DEFAULT_REPLY_TO='${PenpotSmtpDefaultReplyTo}'
-          export PENPOT_SMTP_HOST='${PenpotSmtpHost}'
-          export PENPOT_SMTP_PORT='${PenpotSmtpPort}'
-          export PENPOT_SMTP_USERNAME='${PenpotSmtpUsername}'
-          export PENPOT_SMTP_PASSWORD='${PenpotSmtpPassword}'
-          export PENPOT_SMTP_TLS='${PenpotSmtpTls}'
-          export PENPOT_SMTP_SSL='${PenpotSmtpSsl}'
+              export PENPOT_SECRET_KEY='${PenpotSecretKey}'
+              export PENPOT_VERSION='${PenpotVersion}'
+              export PENPOT_FLAGS=''
+              if [[ '${DeploymentMode}' == 'test' ]]; then
+                export PENPOT_FLAGS='disable-email-verification'
+              fi
+              if [[ '${PenpotEnableSmtp}' == 'true' ]]; then
+                if [[ -n "$PENPOT_FLAGS" ]]; then
+                  export PENPOT_FLAGS="$PENPOT_FLAGS enable-smtp"
+                else
+                  export PENPOT_FLAGS='enable-smtp'
+                fi
+              fi
+              export PENPOT_SMTP_DEFAULT_FROM='${PenpotSmtpDefaultFrom}'
+              export PENPOT_SMTP_DEFAULT_REPLY_TO='${PenpotSmtpDefaultReplyTo}'
+              export PENPOT_SMTP_HOST='${PenpotSmtpHost}'
+              export PENPOT_SMTP_PORT='${PenpotSmtpPort}'
+              export PENPOT_SMTP_USERNAME='${PenpotSmtpUsername}'
+              export PENPOT_SMTP_PASSWORD='${PenpotSmtpPassword}'
+              export PENPOT_SMTP_TLS='${PenpotSmtpTls}'
+              export PENPOT_SMTP_SSL='${PenpotSmtpSsl}'
 
-          /opt/penpot/bin/configure-penpot.sh
-          systemctl enable penpot-compose
-          systemctl restart penpot-compose
-          systemctl restart nginx
+              /opt/penpot/bin/configure-penpot.sh
+              systemctl enable penpot-compose
+              systemctl restart penpot-compose
+              systemctl restart nginx
+            - DefaultPenpotPublicUri: !If
+                - UseAlbHttps
+                - !Sub "https://${DomainName}"
+                - ""
+
+  PenpotLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: UseAlbHttps
+    Properties:
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref SubnetId
+        - !Ref LoadBalancerSubnetId
+      SecurityGroups:
+        - !Ref PenpotLoadBalancerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: penpot-cloud-image-aws-alb
+        - Key: Project
+          Value: penpot-cloud-image-aws
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Repository
+          Value: penpot-cloud-images
+
+  PenpotTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Condition: UseAlbHttps
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      TargetType: instance
+      VpcId: !Ref VpcId
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /
+      Matcher:
+        HttpCode: 200-399
+      Targets:
+        - Id: !Ref PenpotInstance
+          Port: 80
+      Tags:
+        - Key: Name
+          Value: penpot-cloud-image-aws-tg
+        - Key: Project
+          Value: penpot-cloud-image-aws
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Repository
+          Value: penpot-cloud-images
+
+  PenpotHttpRedirectListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: UseAlbHttps
+    Properties:
+      LoadBalancerArn: !Ref PenpotLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: "443"
+            StatusCode: HTTP_301
+
+  PenpotHttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: UseAlbHttps
+    Properties:
+      LoadBalancerArn: !Ref PenpotLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref AcmCertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref PenpotTargetGroup
 
 Outputs:
   InstanceId:
@@ -308,15 +478,23 @@ Outputs:
     Description: Public DNS name assigned to the Penpot host
     Value: !GetAtt PenpotInstance.PublicDnsName
 
+  LoadBalancerDnsName:
+    Condition: UseAlbHttps
+    Description: DNS name assigned by AWS to the Penpot application load balancer
+    Value: !GetAtt PenpotLoadBalancer.DNSName
+
   PenpotUrl:
     Description: URL expected to expose the Penpot application after startup
     Value: !If
       - HasPenpotPublicUri
       - !Ref PenpotPublicUri
-      - !Sub "http://${PenpotInstance.PublicIp}"
+      - !If
+        - UseAlbHttps
+        - !Sub "https://${DomainName}"
+        - !Sub "http://${PenpotInstance.PublicIp}"
 
   PenpotAccessHost:
-    Description: Preferred host value to use for HTTP access and host-level troubleshooting
+    Description: Preferred host value to use for customer access and host-level troubleshooting
     Value: !If
       - HasPenpotPublicUri
       - !Select
@@ -324,11 +502,17 @@ Outputs:
         - !Split
           - /
           - !Ref PenpotPublicUri
-      - !GetAtt PenpotInstance.PublicIp
+      - !If
+        - UseAlbHttps
+        - !Ref DomainName
+        - !GetAtt PenpotInstance.PublicIp
 
   PenpotAccessUri:
     Description: URI value to use when accessing Penpot from a browser
     Value: !If
       - HasPenpotPublicUri
       - !Ref PenpotPublicUri
-      - !Sub "http://${PenpotInstance.PublicIp}"
+      - !If
+        - UseAlbHttps
+        - !Sub "https://${DomainName}"
+        - !Sub "http://${PenpotInstance.PublicIp}"

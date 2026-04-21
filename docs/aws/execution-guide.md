@@ -176,7 +176,27 @@ Use the repository helper to check the current AWS resources:
 ./clouds/aws/scripts/resource-report.sh
 ```
 
-## 10. Update An Existing Test Stack
+## 10. HTTPS ALB Prerequisites
+
+If you want to test the optional `https-alb` path, the stack needs more than the direct `HTTP` prototype flow.
+
+Required inputs and environment assumptions:
+
+- `AccessMode=https-alb`
+- `DomainName=<customer-domain>`
+- `AcmCertificateArn=<certificate-arn>` in the same AWS region
+- `SubnetId=<public-subnet-a>`
+- `LoadBalancerSubnetId=<public-subnet-b>`
+
+Required AWS network shape:
+
+- both subnets must belong to the same `VPC`
+- both subnets must be public
+- both subnets must be in different Availability Zones
+- the customer is responsible for the DNS record that points `DomainName` to the ALB
+- the customer is responsible for the certificate lifecycle and ownership; the stack only consumes `AcmCertificateArn`
+
+## 11. Update An Existing Test Stack
 
 If you changed the `CloudFormation` template and want to reuse the same test stack and parameters, update it with:
 
@@ -192,7 +212,7 @@ aws cloudformation wait stack-update-complete   --region "$AWS_REGION"   --stack
 
 If AWS responds with `No updates are to be performed`, the currently deployed stack already matches the template and parameters sent in the update request.
 
-## 11. Get The Public IP Or URL
+## 12. Get The Public IP Or URL
 
 Once the stack reaches a healthy state, inspect its outputs:
 
@@ -208,7 +228,7 @@ The returned outputs include the public IP, public DNS name, `PenpotUrl`, `Penpo
 
 For browser access, prefer `PenpotAccessUri`. For host-level checks such as `curl` or SSH troubleshooting, use `PenpotAccessHost` together with the public IP or DNS output shown by the stack.
 
-## 12. Clean Up Test Resources
+## 13. Clean Up Test Resources
 
 When validation is complete:
 
