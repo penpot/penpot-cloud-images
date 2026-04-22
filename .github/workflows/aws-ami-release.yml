@@ -66,5 +66,25 @@ jobs:
         run: bash clouds/aws/scripts/validate.sh
 
       - name: Build AMI
+        id: build_ami
         run: |
-          packer build             -var "aws_region=${AWS_REGION}"             -var "project_tag=${PROJECT_TAG}"             -var "release_version=${{ steps.release_version.outputs.version }}"             -var "vpc_id=${AWS_VPC_ID}"             -var "subnet_id=${AWS_SUBNET_ID}"             clouds/aws/packer/single-node.pkr.hcl
+          packer build             -machine-readable             -var "aws_region=${AWS_REGION}"             -var "project_tag=${PROJECT_TAG}"             -var "release_version=${{ steps.release_version.outputs.version }}"             -var "vpc_id=${AWS_VPC_ID}"             -var "subnet_id=${AWS_SUBNET_ID}"             clouds/aws/packer/single-node.pkr.hcl | tee packer-output.log
+
+          ami_id=$(awk -F, '/artifact,0,id/ {split($NF, a, ":"); print a[2]}' packer-output.log | tail -n1)
+
+          if [[ -z "$ami_id" ]]; then
+            echo "Unable to determine AMI ID from Packer output" >&2
+            exit 1
+          fi
+
+          echo "ami_id=$ami_id" >> "$GITHUB_OUTPUT"
+          echo "Built AMI ID: $ami_id"
+
+      - name: Publish build summary
+        run: |
+          {
+            echo "## AWS AMI Release"
+            echo
+            echo "- Penpot release version: ${{ steps.release_version.outputs.version }}"
+            echo "- AMI ID: ${{ steps.build_ami.outputs.ami_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"
