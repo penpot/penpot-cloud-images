@@ -1,0 +1,70 @@
+name: AWS AMI Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      penpot_release_version:
+        description: 'Optional Penpot release version override, for example 1.0.0 or v1.0.0'
+        required: false
+        type: string
+
+jobs:
+  build-ami:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      PROJECT_TAG: ${{ vars.PROJECT_TAG || 'penpot-cloud-image-aws' }}
+      AWS_VPC_ID: ${{ vars.AWS_VPC_ID }}
+      AWS_SUBNET_ID: ${{ vars.AWS_SUBNET_ID }}
+      PENPOT_RELEASE_VERSION: ${{ inputs.penpot_release_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Packer
+        uses: hashicorp/setup-packer@main
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve Penpot release tag
+        id: penpot_release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const override = process.env.PENPOT_RELEASE_VERSION;
+            if (override && override.trim() !== '') {
+              core.setOutput('tag', override.trim());
+              core.info(`Using manual Penpot release override: ${override.trim()}`);
+              return;
+            }
+
+            const release = await github.rest.repos.getLatestRelease({
+              owner: 'penpot',
+              repo: 'penpot'
+            });
+
+            core.setOutput('tag', release.data.tag_name);
+            core.info(`Resolved latest Penpot release: ${release.data.tag_name}`);
+
+      - name: Normalize Penpot release version
+        id: release_version
+        env:
+          PENPOT_RELEASE_TAG: ${{ steps.penpot_release.outputs.tag }}
+        run: |
+          version=$(bash clouds/aws/scripts/get-release-version.sh)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Resolved Penpot release version: $version"
+
+      - name: Validate AWS assets
+        run: bash clouds/aws/scripts/validate.sh
+
+      - name: Build AMI
+        run: |
+          packer build             -var "aws_region=${AWS_REGION}"             -var "project_tag=${PROJECT_TAG}"             -var "release_version=${{ steps.release_version.outputs.version }}"             -var "vpc_id=${AWS_VPC_ID}"             -var "subnet_id=${AWS_SUBNET_ID}"             clouds/aws/packer/single-node.pkr.hcl

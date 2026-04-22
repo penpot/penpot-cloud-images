@@ -27,6 +27,11 @@ variable "project_tag" {
   default = "penpot-cloud-image-aws"
 }
 
+variable "release_version" {
+  type    = string
+  default = ""
+}
+
 variable "vpc_id" {
   type    = string
   default = ""
@@ -37,20 +42,27 @@ variable "subnet_id" {
   default = ""
 }
 
+locals {
+  ami_version_suffix = var.release_version != "" ? var.release_version : formatdate("YYYYMMDDhhmmss", timestamp())
+  ami_name_value     = "${var.ami_name_prefix}-${local.ami_version_suffix}"
+}
+
 source "amazon-ebs" "al2023" {
   region                                = var.aws_region
   instance_type                         = var.instance_type
   ssh_username                          = "ec2-user"
-  ami_name                              = "${var.ami_name_prefix}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+  ami_name                              = local.ami_name_value
   vpc_id                                = var.vpc_id != "" ? var.vpc_id : null
   subnet_id                             = var.subnet_id != "" ? var.subnet_id : null
   associate_public_ip_address           = true
   temporary_security_group_source_cidrs = ["0.0.0.0/0"]
 
   tags = {
+    Name       = local.ami_name_value
     Project    = var.project_tag
     ManagedBy  = "packer"
     Repository = "penpot-cloud-images"
+    Version    = var.release_version != "" ? var.release_version : "unversioned"
   }
 
   run_tags = {
@@ -61,9 +73,11 @@ source "amazon-ebs" "al2023" {
   }
 
   snapshot_tags = {
+    Name       = local.ami_name_value
     Project    = var.project_tag
     ManagedBy  = "packer"
     Repository = "penpot-cloud-images"
+    Version    = var.release_version != "" ? var.release_version : "unversioned"
   }
 
   source_ami_filter {
