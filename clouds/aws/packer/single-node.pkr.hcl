@@ -32,6 +32,11 @@ variable "release_version" {
   default = ""
 }
 
+variable "build_variant" {
+  type    = string
+  default = ""
+}
+
 variable "vpc_id" {
   type    = string
   default = ""
@@ -43,7 +48,8 @@ variable "subnet_id" {
 }
 
 locals {
-  ami_version_suffix = var.release_version != "" ? var.release_version : formatdate("YYYYMMDDhhmmss", timestamp())
+  ami_version_base   = var.release_version != "" ? var.release_version : formatdate("YYYYMMDDhhmmss", timestamp())
+  ami_version_suffix = var.build_variant != "" ? "${local.ami_version_base}-${var.build_variant}" : local.ami_version_base
   ami_name_value     = "${var.ami_name_prefix}-${local.ami_version_suffix}"
 }
 
@@ -58,11 +64,12 @@ source "amazon-ebs" "al2023" {
   temporary_security_group_source_cidrs = ["0.0.0.0/0"]
 
   tags = {
-    Name       = local.ami_name_value
-    Project    = var.project_tag
-    ManagedBy  = "packer"
-    Repository = "penpot-cloud-images"
-    Version    = var.release_version != "" ? var.release_version : "unversioned"
+    Name         = local.ami_name_value
+    Project      = var.project_tag
+    ManagedBy    = "packer"
+    Repository   = "penpot-cloud-images"
+    Version      = var.release_version != "" ? var.release_version : "unversioned"
+    BuildVariant = var.build_variant != "" ? var.build_variant : "default"
   }
 
   run_tags = {
@@ -73,11 +80,12 @@ source "amazon-ebs" "al2023" {
   }
 
   snapshot_tags = {
-    Name       = local.ami_name_value
-    Project    = var.project_tag
-    ManagedBy  = "packer"
-    Repository = "penpot-cloud-images"
-    Version    = var.release_version != "" ? var.release_version : "unversioned"
+    Name         = local.ami_name_value
+    Project      = var.project_tag
+    ManagedBy    = "packer"
+    Repository   = "penpot-cloud-images"
+    Version      = var.release_version != "" ? var.release_version : "unversioned"
+    BuildVariant = var.build_variant != "" ? var.build_variant : "default"
   }
 
   source_ami_filter {
@@ -113,6 +121,11 @@ build {
   provisioner "file" {
     source      = "shared/scripts/configure-penpot.sh"
     destination = "/tmp/configure-penpot.sh"
+  }
+
+  provisioner "file" {
+    source      = "shared/scripts/upgrade-penpot.sh"
+    destination = "/tmp/upgrade-penpot.sh"
   }
 
   provisioner "file" {

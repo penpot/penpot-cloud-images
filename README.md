@@ -54,6 +54,56 @@ The current `AWS` implementation covers:
 3. Pass runtime configuration through CloudFormation parameters and EC2 user data.
 4. Configure Penpot on first boot, start the stack with `docker compose`, and expose it through host-level `nginx` on port `80`.
 
+## Current Upgrade Flow
+
+For the current `DatabaseMode=local` path, application upgrades should be done in place on the existing EC2 instance by updating `PenpotVersion` through `CloudFormation`, not by replacing the instance with a new `AmiId`.
+
+This flow was validated from `2.14.2` to `2.14.3` while preserving local application data.
+
+<details>
+<summary>Show upgrade command</summary>
+
+```bash
+aws cloudformation update-stack \
+  --region "$AWS_REGION" \
+  --stack-name "$AWS_STACK_NAME" \
+  --template-body file://clouds/aws/cloudformation/penpot-single-node.yaml \
+  --capabilities CAPABILITY_IAM \
+  --parameters \
+    ParameterKey=AmiId,UsePreviousValue=true \
+    ParameterKey=InstanceType,UsePreviousValue=true \
+    ParameterKey=RootVolumeSize,UsePreviousValue=true \
+    ParameterKey=KeyName,UsePreviousValue=true \
+    ParameterKey=VpcId,UsePreviousValue=true \
+    ParameterKey=SubnetId,UsePreviousValue=true \
+    ParameterKey=LoadBalancerSubnetId,UsePreviousValue=true \
+    ParameterKey=SshCidr,UsePreviousValue=true \
+    ParameterKey=AccessMode,UsePreviousValue=true \
+    ParameterKey=PenpotPublicUri,UsePreviousValue=true \
+    ParameterKey=PenpotSecretKey,UsePreviousValue=true \
+    ParameterKey=PenpotVersion,ParameterValue=<new-version> \
+    ParameterKey=DeploymentMode,UsePreviousValue=true \
+    ParameterKey=DatabaseMode,UsePreviousValue=true \
+    ParameterKey=DomainName,UsePreviousValue=true \
+    ParameterKey=AcmCertificateArn,UsePreviousValue=true \
+    ParameterKey=ExternalDatabaseHost,UsePreviousValue=true \
+    ParameterKey=ExternalDatabasePort,UsePreviousValue=true \
+    ParameterKey=ExternalDatabaseName,UsePreviousValue=true \
+    ParameterKey=ExternalDatabaseUsername,UsePreviousValue=true \
+    ParameterKey=ExternalDatabasePassword,UsePreviousValue=true \
+    ParameterKey=PenpotEnableSmtp,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpDefaultFrom,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpDefaultReplyTo,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpHost,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpPort,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpUsername,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpPassword,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpTls,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpSsl,UsePreviousValue=true
+```
+
+</details>
+
 For AWS accounts without a `default VPC`, the Packer build must be run with explicit `vpc_id` and `subnet_id`.
 
 On the current Amazon Linux 2023 base image, `docker-compose-plugin` may not be available as a package. The current AMI build installs Docker Compose v2 explicitly as a Docker CLI plugin.

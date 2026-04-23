@@ -9,6 +9,7 @@ Metadata:
         Parameters:
           - AmiId
           - InstanceType
+          - RootVolumeSize
           - KeyName
           - VpcId
           - SubnetId
@@ -22,11 +23,20 @@ Metadata:
           - PenpotSecretKey
           - PenpotVersion
           - DeploymentMode
+          - DatabaseMode
       - Label:
           default: HTTPS Configuration
         Parameters:
           - DomainName
           - AcmCertificateArn
+      - Label:
+          default: Database Configuration
+        Parameters:
+          - ExternalDatabaseHost
+          - ExternalDatabasePort
+          - ExternalDatabaseName
+          - ExternalDatabaseUsername
+          - ExternalDatabasePassword
       - Label:
           default: SMTP Configuration
         Parameters:
@@ -44,6 +54,8 @@ Metadata:
         default: Penpot AMI ID
       InstanceType:
         default: EC2 Instance Type
+      RootVolumeSize:
+        default: Root Volume Size
       KeyName:
         default: EC2 Key Pair
       VpcId:
@@ -64,10 +76,22 @@ Metadata:
         default: Penpot Version
       DeploymentMode:
         default: Deployment Mode
+      DatabaseMode:
+        default: Database Mode
       DomainName:
         default: Domain Name
       AcmCertificateArn:
         default: ACM Certificate ARN
+      ExternalDatabaseHost:
+        default: External Database Host
+      ExternalDatabasePort:
+        default: External Database Port
+      ExternalDatabaseName:
+        default: External Database Name
+      ExternalDatabaseUsername:
+        default: External Database Username
+      ExternalDatabasePassword:
+        default: External Database Password
       PenpotEnableSmtp:
         default: Enable SMTP
       PenpotSmtpDefaultFrom:
@@ -100,6 +124,12 @@ Parameters:
       - t3.medium
       - t3.large
       - t3.xlarge
+
+  RootVolumeSize:
+    Type: Number
+    Default: 20
+    MinValue: 16
+    Description: Size in GiB for the EC2 root EBS volume. Increase this if container image extraction or local Docker storage needs more space.
 
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
@@ -159,6 +189,14 @@ Parameters:
       - test
     Description: Deployment behavior. Use production for normal email-based flows and test to disable email verification.
 
+  DatabaseMode:
+    Type: String
+    Default: local
+    AllowedValues:
+      - local
+      - external
+    Description: Database topology. Use local to run PostgreSQL inside the instance or external to connect Penpot to a customer-managed PostgreSQL service.
+
   DomainName:
     Type: String
     Default: ""
@@ -168,6 +206,32 @@ Parameters:
     Type: String
     Default: ""
     Description: ACM certificate ARN used by the ALB HTTPS listener when AccessMode is https-alb. The certificate must exist in the same region and cover DomainName
+
+  ExternalDatabaseHost:
+    Type: String
+    Default: ""
+    Description: PostgreSQL host used when DatabaseMode is external
+
+  ExternalDatabasePort:
+    Type: Number
+    Default: 5432
+    Description: PostgreSQL port used when DatabaseMode is external
+
+  ExternalDatabaseName:
+    Type: String
+    Default: penpot
+    Description: PostgreSQL database name used when DatabaseMode is external
+
+  ExternalDatabaseUsername:
+    Type: String
+    Default: ""
+    Description: PostgreSQL username used when DatabaseMode is external
+
+  ExternalDatabasePassword:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: PostgreSQL password used when DatabaseMode is external
 
   PenpotEnableSmtp:
     Type: String
@@ -229,6 +293,7 @@ Mappings: {}
 Conditions:
   HasPenpotPublicUri: !Not [!Equals [!Ref PenpotPublicUri, ""]]
   UseAlbHttps: !Equals [!Ref AccessMode, https-alb]
+  UseExternalDatabase: !Equals [!Ref DatabaseMode, external]
 
 Rules:
   DomainNameRequiredWhenUsingAlbHttps:
@@ -251,8 +316,47 @@ Rules:
         AssertDescription: PenpotSmtpUsername must be provided when SMTP is enabled
       - Assert: !Not [!Equals [!Ref PenpotSmtpPassword, ""]]
         AssertDescription: PenpotSmtpPassword must be provided when SMTP is enabled
+  ExternalDatabaseSettingsRequiredWhenEnabled:
+    RuleCondition: !Equals [!Ref DatabaseMode, external]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref ExternalDatabaseHost, ""]]
+        AssertDescription: ExternalDatabaseHost must be provided when DatabaseMode is external
+      - Assert: !Not [!Equals [!Ref ExternalDatabaseUsername, ""]]
+        AssertDescription: ExternalDatabaseUsername must be provided when DatabaseMode is external
+      - Assert: !Not [!Equals [!Ref ExternalDatabasePassword, ""]]
+        AssertDescription: ExternalDatabasePassword must be provided when DatabaseMode is external
 
 Resources:
+  PenpotInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: penpot-cloud-image-aws-instance-role
+        - Key: Project
+          Value: penpot-cloud-image-aws
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Repository
+          Value: penpot-cloud-images
+
+  PenpotInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref PenpotInstanceRole
+
   PenpotLoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Condition: UseAlbHttps
@@ -319,7 +423,14 @@ Resources:
     Properties:
       ImageId: !Ref AmiId
       InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref PenpotInstanceProfile
       KeyName: !Ref KeyName
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: true
+            VolumeSize: !Ref RootVolumeSize
+            VolumeType: gp3
       NetworkInterfaces:
         - AssociatePublicIpAddress: true
           DeviceIndex: "0"
@@ -363,6 +474,7 @@ Resources:
 
               export PENPOT_SECRET_KEY='${PenpotSecretKey}'
               export PENPOT_VERSION='${PenpotVersion}'
+              export PENPOT_DATABASE_MODE='${DatabaseMode}'
               export PENPOT_FLAGS=''
               if [[ '${DeploymentMode}' == 'test' ]]; then
                 export PENPOT_FLAGS='disable-email-verification'
@@ -382,6 +494,13 @@ Resources:
               export PENPOT_SMTP_PASSWORD='${PenpotSmtpPassword}'
               export PENPOT_SMTP_TLS='${PenpotSmtpTls}'
               export PENPOT_SMTP_SSL='${PenpotSmtpSsl}'
+              if [[ '${DatabaseMode}' == 'external' ]]; then
+                export PENPOT_DATABASE_HOST='${ExternalDatabaseHost}'
+                export PENPOT_DATABASE_PORT='${ExternalDatabasePort}'
+                export PENPOT_DATABASE_NAME='${ExternalDatabaseName}'
+                export PENPOT_DATABASE_USERNAME='${ExternalDatabaseUsername}'
+                export PENPOT_DATABASE_PASSWORD='${ExternalDatabasePassword}'
+              fi
 
               /opt/penpot/bin/configure-penpot.sh
               systemctl enable penpot-compose
@@ -391,6 +510,20 @@ Resources:
                 - UseAlbHttps
                 - !Sub "https://${DomainName}"
                 - ""
+
+  PenpotInPlaceUpgradeAssociation:
+    Type: AWS::SSM::Association
+    Properties:
+      Name: AWS-RunShellScript
+      AssociationName: !Sub "penpot-cloud-image-aws-upgrade-${AWS::StackName}"
+      Targets:
+        - Key: InstanceIds
+          Values:
+            - !Ref PenpotInstance
+      Parameters:
+        commands:
+          - !Sub "/opt/penpot/bin/upgrade-penpot.sh '${PenpotVersion}'"
+      WaitForSuccessTimeoutSeconds: 900
 
   PenpotLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer

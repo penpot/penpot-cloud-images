@@ -118,3 +118,78 @@ AWS_PROFILE=<profile> packer build \
   -var "subnet_id=<subnet-id>" \
   clouds/aws/packer/single-node.pkr.hcl
 ```
+
+## Packer Build With Variant
+
+<details>
+<summary>Show command</summary>
+
+```bash
+AWS_PROFILE=<profile> packer build \
+  -var "aws_region=<region>" \
+  -var "release_version=<real-penpot-version>" \
+  -var "build_variant=<variant>" \
+  -var "vpc_id=<vpc-id>" \
+  -var "subnet_id=<subnet-id>" \
+  clouds/aws/packer/single-node.pkr.hcl
+```
+
+</details>
+
+## In-Place Penpot Upgrade Through CloudFormation
+
+<details>
+<summary>Show command</summary>
+
+```bash
+AWS_PROFILE=<profile> aws cloudformation update-stack \
+  --region <region> \
+  --stack-name <stack-name> \
+  --template-body file://clouds/aws/cloudformation/penpot-single-node.yaml \
+  --capabilities CAPABILITY_IAM \
+  --parameters \
+    ParameterKey=AmiId,UsePreviousValue=true \
+    ParameterKey=InstanceType,UsePreviousValue=true \
+    ParameterKey=RootVolumeSize,UsePreviousValue=true \
+    ParameterKey=KeyName,UsePreviousValue=true \
+    ParameterKey=VpcId,UsePreviousValue=true \
+    ParameterKey=SubnetId,UsePreviousValue=true \
+    ParameterKey=LoadBalancerSubnetId,UsePreviousValue=true \
+    ParameterKey=SshCidr,UsePreviousValue=true \
+    ParameterKey=AccessMode,UsePreviousValue=true \
+    ParameterKey=PenpotPublicUri,UsePreviousValue=true \
+    ParameterKey=PenpotSecretKey,UsePreviousValue=true \
+    ParameterKey=PenpotVersion,ParameterValue=<new-version> \
+    ParameterKey=DeploymentMode,UsePreviousValue=true \
+    ParameterKey=DatabaseMode,UsePreviousValue=true \
+    ParameterKey=DomainName,UsePreviousValue=true \
+    ParameterKey=AcmCertificateArn,UsePreviousValue=true \
+    ParameterKey=ExternalDatabaseHost,UsePreviousValue=true \
+    ParameterKey=ExternalDatabasePort,UsePreviousValue=true \
+    ParameterKey=ExternalDatabaseName,UsePreviousValue=true \
+    ParameterKey=ExternalDatabaseUsername,UsePreviousValue=true \
+    ParameterKey=ExternalDatabasePassword,UsePreviousValue=true \
+    ParameterKey=PenpotEnableSmtp,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpDefaultFrom,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpDefaultReplyTo,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpHost,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpPort,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpUsername,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpPassword,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpTls,UsePreviousValue=true \
+    ParameterKey=PenpotSmtpSsl,UsePreviousValue=true
+```
+
+</details>
+
+## Direct Manual Upgrade On The Instance
+
+<details>
+<summary>Show command</summary>
+
+```bash
+ssh -i <key>.pem ec2-user@<host>
+sudo /opt/penpot/bin/upgrade-penpot.sh <version>
+```
+
+</details>
