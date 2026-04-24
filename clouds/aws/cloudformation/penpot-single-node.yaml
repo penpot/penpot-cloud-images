@@ -38,6 +38,11 @@ Metadata:
           - ExternalDatabaseUsername
           - ExternalDatabasePassword
       - Label:
+          default: Valkey Configuration
+        Parameters:
+          - ValkeyMode
+          - ExternalValkeyUri
+      - Label:
           default: SMTP Configuration
         Parameters:
           - PenpotEnableSmtp
@@ -92,6 +97,10 @@ Metadata:
         default: External Database Username
       ExternalDatabasePassword:
         default: External Database Password
+      ValkeyMode:
+        default: Valkey Mode
+      ExternalValkeyUri:
+        default: External Valkey URI
       PenpotEnableSmtp:
         default: Enable SMTP
       PenpotSmtpDefaultFrom:
@@ -197,6 +206,14 @@ Parameters:
       - external
     Description: Database topology. Use local to run PostgreSQL inside the instance or external to connect Penpot to a customer-managed PostgreSQL service.
 
+  ValkeyMode:
+    Type: String
+    Default: local
+    AllowedValues:
+      - local
+      - external
+    Description: Valkey topology. Use local to run Valkey inside the instance or external to connect Penpot to a customer-managed Valkey/Redis-compatible service.
+
   DomainName:
     Type: String
     Default: ""
@@ -232,6 +249,11 @@ Parameters:
     Default: ""
     NoEcho: true
     Description: PostgreSQL password used when DatabaseMode is external
+
+  ExternalValkeyUri:
+    Type: String
+    Default: ""
+    Description: Valkey or Redis-compatible URI used when ValkeyMode is external
 
   PenpotEnableSmtp:
     Type: String
@@ -294,6 +316,7 @@ Conditions:
   HasPenpotPublicUri: !Not [!Equals [!Ref PenpotPublicUri, ""]]
   UseAlbHttps: !Equals [!Ref AccessMode, https-alb]
   UseExternalDatabase: !Equals [!Ref DatabaseMode, external]
+  UseExternalValkey: !Equals [!Ref ValkeyMode, external]
 
 Rules:
   DomainNameRequiredWhenUsingAlbHttps:
@@ -325,6 +348,11 @@ Rules:
         AssertDescription: ExternalDatabaseUsername must be provided when DatabaseMode is external
       - Assert: !Not [!Equals [!Ref ExternalDatabasePassword, ""]]
         AssertDescription: ExternalDatabasePassword must be provided when DatabaseMode is external
+  ExternalValkeySettingsRequiredWhenEnabled:
+    RuleCondition: !Equals [!Ref ValkeyMode, external]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref ExternalValkeyUri, ""]]
+        AssertDescription: ExternalValkeyUri must be provided when ValkeyMode is external
 
 Resources:
   PenpotInstanceRole:
@@ -475,6 +503,7 @@ Resources:
               export PENPOT_SECRET_KEY='${PenpotSecretKey}'
               export PENPOT_VERSION='${PenpotVersion}'
               export PENPOT_DATABASE_MODE='${DatabaseMode}'
+              export PENPOT_VALKEY_MODE='${ValkeyMode}'
               export PENPOT_FLAGS=''
               if [[ '${DeploymentMode}' == 'test' ]]; then
                 export PENPOT_FLAGS='disable-email-verification'
@@ -500,6 +529,9 @@ Resources:
                 export PENPOT_DATABASE_NAME='${ExternalDatabaseName}'
                 export PENPOT_DATABASE_USERNAME='${ExternalDatabaseUsername}'
                 export PENPOT_DATABASE_PASSWORD='${ExternalDatabasePassword}'
+              fi
+              if [[ '${ValkeyMode}' == 'external' ]]; then
+                export PENPOT_REDIS_URI='${ExternalValkeyUri}'
               fi
 
               /opt/penpot/bin/configure-penpot.sh

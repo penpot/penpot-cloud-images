@@ -20,8 +20,12 @@ sudo bash -lc "
   source '${ENV_FILE}'
   set +a
   cd /opt/penpot/compose
-  /usr/bin/docker compose -f '${COMPOSE_FILE}' pull
-  /usr/bin/docker compose -f '${COMPOSE_FILE}' up -d
+  /usr/bin/flock -w 900 /run/penpot-compose.lock /bin/bash -lc '
+    set -euo pipefail
+    cd /opt/penpot/compose
+    /usr/bin/docker compose -f \"${COMPOSE_FILE}\" pull
+    /usr/bin/docker compose -f \"${COMPOSE_FILE}\" up -d
+  '
 "
 
 echo "Penpot upgrade completed"
