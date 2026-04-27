@@ -22,6 +22,7 @@ services:
     depends_on:
       penpot-postgres:
         condition: service_healthy
+        required: false
     environment:
       PENPOT_FLAGS: "${PENPOT_FLAGS:-enable-prepl-server}"
       PENPOT_PUBLIC_URI: "${PENPOT_PUBLIC_URI}"
@@ -56,6 +57,8 @@ services:
   penpot-postgres:
     image: "postgres:15"
     restart: always
+    profiles:
+      - local-postgres
     stop_signal: SIGINT
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U penpot"]
