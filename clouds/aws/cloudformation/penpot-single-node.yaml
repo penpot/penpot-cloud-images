@@ -187,8 +187,7 @@ Parameters:
 
   PenpotVersion:
     Type: String
-    Default: latest
-    Description: Penpot container image version to deploy
+    Description: Penpot container image version to deploy. This parameter is required.
 
   DeploymentMode:
     Type: String

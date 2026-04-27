@@ -300,7 +300,7 @@ aws cloudformation create-stack \
     ParameterKey=SshCidr,ParameterValue="$AWS_SSH_CIDR" \
     ParameterKey=DatabaseMode,ParameterValue=local \
     ParameterKey=PenpotSecretKey,ParameterValue=$(openssl rand -hex 32) \
-    ParameterKey=PenpotVersion,ParameterValue=latest \
+    ParameterKey=PenpotVersion,ParameterValue=<penpot-version> \
     ParameterKey=DeploymentMode,ParameterValue=test
 ```
 
@@ -332,7 +332,7 @@ aws cloudformation create-stack \
     ParameterKey=ExternalDatabaseUsername,ParameterValue="<db-user>" \
     ParameterKey=ExternalDatabasePassword,ParameterValue="<db-password>" \
     ParameterKey=PenpotSecretKey,ParameterValue=$(openssl rand -hex 32) \
-    ParameterKey=PenpotVersion,ParameterValue=latest \
+    ParameterKey=PenpotVersion,ParameterValue=<penpot-version> \
     ParameterKey=DeploymentMode,ParameterValue=test
 ```
 

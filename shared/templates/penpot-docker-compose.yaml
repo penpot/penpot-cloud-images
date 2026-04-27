@@ -1,6 +1,6 @@
 services:
   penpot-frontend:
-    image: "penpotapp/frontend:${PENPOT_VERSION:-latest}"
+    image: "penpotapp/frontend:${PENPOT_VERSION}"
     restart: always
     ports:
       - "127.0.0.1:9001:8080"
@@ -15,7 +15,7 @@ services:
       PENPOT_HTTP_SERVER_MAX_MULTIPART_BODY_SIZE: "${PENPOT_HTTP_SERVER_MAX_MULTIPART_BODY_SIZE:-367001600}"
 
   penpot-backend:
-    image: "penpotapp/backend:${PENPOT_VERSION:-latest}"
+    image: "penpotapp/backend:${PENPOT_VERSION}"
     restart: always
     volumes:
       - penpot_assets:/opt/data/assets
@@ -46,7 +46,7 @@ services:
       PENPOT_SMTP_SSL: "${PENPOT_SMTP_SSL:-false}"
 
   penpot-exporter:
-    image: "penpotapp/exporter:${PENPOT_VERSION:-latest}"
+    image: "penpotapp/exporter:${PENPOT_VERSION}"
     restart: always
     environment:
       PENPOT_SECRET_KEY: "${PENPOT_SECRET_KEY}"
