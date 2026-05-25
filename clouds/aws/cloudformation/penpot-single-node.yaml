@@ -21,6 +21,7 @@ Metadata:
           - AccessMode
           - PenpotPublicUri
           - PenpotSecretKey
+          - PenpotSecretKeySsmParameterName
           - PenpotVersion
           - DeploymentMode
           - DatabaseMode
@@ -37,6 +38,7 @@ Metadata:
           - ExternalDatabaseName
           - ExternalDatabaseUsername
           - ExternalDatabasePassword
+          - ExternalDatabasePasswordSsmParameterName
       - Label:
           default: Valkey Configuration
         Parameters:
@@ -52,6 +54,7 @@ Metadata:
           - PenpotSmtpPort
           - PenpotSmtpUsername
           - PenpotSmtpPassword
+          - PenpotSmtpPasswordSsmParameterName
           - PenpotSmtpTls
           - PenpotSmtpSsl
     ParameterLabels:
@@ -77,6 +80,8 @@ Metadata:
         default: Penpot Public URI
       PenpotSecretKey:
         default: Penpot Secret Key
+      PenpotSecretKeySsmParameterName:
+        default: Penpot Secret Key SSM Parameter
       PenpotVersion:
         default: Penpot Version
       DeploymentMode:
@@ -97,6 +102,8 @@ Metadata:
         default: External Database Username
       ExternalDatabasePassword:
         default: External Database Password
+      ExternalDatabasePasswordSsmParameterName:
+        default: External Database Password SSM Parameter
       ValkeyMode:
         default: Valkey Mode
       ExternalValkeyUri:
@@ -115,6 +122,8 @@ Metadata:
         default: SMTP Username
       PenpotSmtpPassword:
         default: SMTP Password
+      PenpotSmtpPasswordSsmParameterName:
+        default: SMTP Password SSM Parameter
       PenpotSmtpTls:
         default: Use STARTTLS
       PenpotSmtpSsl:
@@ -180,10 +189,16 @@ Parameters:
 
   PenpotSecretKey:
     Type: String
+    Default: ""
     NoEcho: true
-    MinLength: 32
-    Description: Random secret used by Penpot sessions and tokens
-    ConstraintDescription: Must be at least 32 characters long
+    Description: Random secret used by Penpot sessions and tokens. Leave empty when PenpotSecretKeySsmParameterName is used.
+    AllowedPattern: ^$|^.{32,}$
+    ConstraintDescription: Must be empty or at least 32 characters long
+
+  PenpotSecretKeySsmParameterName:
+    Type: String
+    Default: ""
+    Description: Optional SSM Parameter Store name for the Penpot secret key. Use a SecureString parameter to avoid passing the secret directly through CloudFormation.
 
   PenpotVersion:
     Type: String
@@ -247,7 +262,12 @@ Parameters:
     Type: String
     Default: ""
     NoEcho: true
-    Description: PostgreSQL password used when DatabaseMode is external
+    Description: PostgreSQL password used when DatabaseMode is external. Leave empty when ExternalDatabasePasswordSsmParameterName is used.
+
+  ExternalDatabasePasswordSsmParameterName:
+    Type: String
+    Default: ""
+    Description: Optional SSM Parameter Store name for the external PostgreSQL password
 
   ExternalValkeyUri:
     Type: String
@@ -291,7 +311,12 @@ Parameters:
     Type: String
     Default: ""
     NoEcho: true
-    Description: SMTP password. Leave empty if SMTP is disabled
+    Description: SMTP password. Leave empty if SMTP is disabled or when PenpotSmtpPasswordSsmParameterName is used.
+
+  PenpotSmtpPasswordSsmParameterName:
+    Type: String
+    Default: ""
+    Description: Optional SSM Parameter Store name for the SMTP password
 
   PenpotSmtpTls:
     Type: String
@@ -316,8 +341,24 @@ Conditions:
   UseAlbHttps: !Equals [!Ref AccessMode, https-alb]
   UseExternalDatabase: !Equals [!Ref DatabaseMode, external]
   UseExternalValkey: !Equals [!Ref ValkeyMode, external]
+  HasPenpotSecretKeyInline: !Not [!Equals [!Ref PenpotSecretKey, ""]]
+  HasPenpotSecretKeySsmParameter: !Not [!Equals [!Ref PenpotSecretKeySsmParameterName, ""]]
+  HasExternalDatabasePasswordInline: !Not [!Equals [!Ref ExternalDatabasePassword, ""]]
+  HasExternalDatabasePasswordSsmParameter: !Not [!Equals [!Ref ExternalDatabasePasswordSsmParameterName, ""]]
+  HasSmtpPasswordInline: !Not [!Equals [!Ref PenpotSmtpPassword, ""]]
+  HasSmtpPasswordSsmParameter: !Not [!Equals [!Ref PenpotSmtpPasswordSsmParameterName, ""]]
+  UseSsmSecretParameters: !Or
+    - !Condition HasPenpotSecretKeySsmParameter
+    - !Condition HasExternalDatabasePasswordSsmParameter
+    - !Condition HasSmtpPasswordSsmParameter
 
 Rules:
+  PenpotSecretKeySourceRequired:
+    Assertions:
+      - Assert: !Or
+          - !Not [!Equals [!Ref PenpotSecretKey, ""]]
+          - !Not [!Equals [!Ref PenpotSecretKeySsmParameterName, ""]]
+        AssertDescription: Provide either PenpotSecretKey or PenpotSecretKeySsmParameterName
   DomainNameRequiredWhenUsingAlbHttps:
     RuleCondition: !Equals [!Ref AccessMode, https-alb]
     Assertions:
@@ -336,8 +377,10 @@ Rules:
         AssertDescription: PenpotSmtpHost must be provided when SMTP is enabled
       - Assert: !Not [!Equals [!Ref PenpotSmtpUsername, ""]]
         AssertDescription: PenpotSmtpUsername must be provided when SMTP is enabled
-      - Assert: !Not [!Equals [!Ref PenpotSmtpPassword, ""]]
-        AssertDescription: PenpotSmtpPassword must be provided when SMTP is enabled
+      - Assert: !Or
+          - !Not [!Equals [!Ref PenpotSmtpPassword, ""]]
+          - !Not [!Equals [!Ref PenpotSmtpPasswordSsmParameterName, ""]]
+        AssertDescription: PenpotSmtpPassword or PenpotSmtpPasswordSsmParameterName must be provided when SMTP is enabled
   ExternalDatabaseSettingsRequiredWhenEnabled:
     RuleCondition: !Equals [!Ref DatabaseMode, external]
     Assertions:
@@ -345,8 +388,10 @@ Rules:
         AssertDescription: ExternalDatabaseHost must be provided when DatabaseMode is external
       - Assert: !Not [!Equals [!Ref ExternalDatabaseUsername, ""]]
         AssertDescription: ExternalDatabaseUsername must be provided when DatabaseMode is external
-      - Assert: !Not [!Equals [!Ref ExternalDatabasePassword, ""]]
-        AssertDescription: ExternalDatabasePassword must be provided when DatabaseMode is external
+      - Assert: !Or
+          - !Not [!Equals [!Ref ExternalDatabasePassword, ""]]
+          - !Not [!Equals [!Ref ExternalDatabasePasswordSsmParameterName, ""]]
+        AssertDescription: ExternalDatabasePassword or ExternalDatabasePasswordSsmParameterName must be provided when DatabaseMode is external
   ExternalValkeySettingsRequiredWhenEnabled:
     RuleCondition: !Equals [!Ref ValkeyMode, external]
     Assertions:
@@ -368,6 +413,18 @@ Resources:
               - sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - !If
+          - UseSsmSecretParameters
+          - PolicyName: penpot-cloud-image-aws-ssm-secrets
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - ssm:GetParameter
+                  Resource: "*"
+          - !Ref AWS::NoValue
       Tags:
         - Key: Name
           Value: penpot-cloud-image-aws-instance-role
@@ -452,10 +509,16 @@ Resources:
       InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref PenpotInstanceProfile
       KeyName: !Ref KeyName
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+        InstanceMetadataTags: disabled
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
             DeleteOnTermination: true
+            Encrypted: true
             VolumeSize: !Ref RootVolumeSize
             VolumeType: gp3
       NetworkInterfaces:
@@ -478,7 +541,17 @@ Resources:
           Fn::Sub:
             - |
               #!/bin/bash
-              set -euxo pipefail
+              set -euo pipefail
+
+              resolve_ssm_parameter() {
+                local parameter_name="$1"
+
+                aws ssm get-parameter \
+                  --name "$parameter_name" \
+                  --with-decryption \
+                  --query 'Parameter.Value' \
+                  --output text
+              }
 
               DEFAULT_PENPOT_PUBLIC_URI='${DefaultPenpotPublicUri}'
               PENPOT_PUBLIC_URI_INPUT='${PenpotPublicUri}'
@@ -499,7 +572,11 @@ Resources:
                 export PENPOT_PUBLIC_URI="$PENPOT_PUBLIC_URI_INPUT"
               fi
 
-              export PENPOT_SECRET_KEY='${PenpotSecretKey}'
+              if [[ -n '${PenpotSecretKeySsmParameterName}' ]]; then
+                export PENPOT_SECRET_KEY="$(resolve_ssm_parameter '${PenpotSecretKeySsmParameterName}')"
+              else
+                export PENPOT_SECRET_KEY='${PenpotSecretKey}'
+              fi
               export PENPOT_VERSION='${PenpotVersion}'
               export PENPOT_DATABASE_MODE='${DatabaseMode}'
               export PENPOT_VALKEY_MODE='${ValkeyMode}'
@@ -519,7 +596,11 @@ Resources:
               export PENPOT_SMTP_HOST='${PenpotSmtpHost}'
               export PENPOT_SMTP_PORT='${PenpotSmtpPort}'
               export PENPOT_SMTP_USERNAME='${PenpotSmtpUsername}'
-              export PENPOT_SMTP_PASSWORD='${PenpotSmtpPassword}'
+              if [[ -n '${PenpotSmtpPasswordSsmParameterName}' ]]; then
+                export PENPOT_SMTP_PASSWORD="$(resolve_ssm_parameter '${PenpotSmtpPasswordSsmParameterName}')"
+              else
+                export PENPOT_SMTP_PASSWORD='${PenpotSmtpPassword}'
+              fi
               export PENPOT_SMTP_TLS='${PenpotSmtpTls}'
               export PENPOT_SMTP_SSL='${PenpotSmtpSsl}'
               if [[ '${DatabaseMode}' == 'external' ]]; then
@@ -527,7 +608,11 @@ Resources:
                 export PENPOT_DATABASE_PORT='${ExternalDatabasePort}'
                 export PENPOT_DATABASE_NAME='${ExternalDatabaseName}'
                 export PENPOT_DATABASE_USERNAME='${ExternalDatabaseUsername}'
-                export PENPOT_DATABASE_PASSWORD='${ExternalDatabasePassword}'
+                if [[ -n '${ExternalDatabasePasswordSsmParameterName}' ]]; then
+                  export PENPOT_DATABASE_PASSWORD="$(resolve_ssm_parameter '${ExternalDatabasePasswordSsmParameterName}')"
+                else
+                  export PENPOT_DATABASE_PASSWORD='${ExternalDatabasePassword}'
+                fi
               fi
               if [[ '${ValkeyMode}' == 'external' ]]; then
                 export PENPOT_REDIS_URI='${ExternalValkeyUri}'

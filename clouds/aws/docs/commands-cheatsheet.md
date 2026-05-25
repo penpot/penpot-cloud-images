@@ -109,6 +109,16 @@ AWS_PROFILE=<profile> ./clouds/aws/scripts/resource-report.sh
 AWS_PROFILE=<profile> ./clouds/aws/scripts/cleanup.sh
 ```
 
+## SSM SecureString Secret
+
+```bash
+AWS_PROFILE=<profile> aws ssm put-parameter \
+  --region <region> \
+  --name /penpot/<stack-name>/secret-key \
+  --type SecureString \
+  --value "$(openssl rand -hex 32)"
+```
+
 ## Packer Build
 
 ```bash

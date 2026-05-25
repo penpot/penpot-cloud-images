@@ -87,6 +87,8 @@ Key variables used in the current flow:
 | `BUILD_VARIANT` | Optional AMI build distinction without changing the real Penpot release version | `any-custom-variant` |
 | `AWS_AMI_ID` | Specific AMI to deploy through CloudFormation | `ami-...` |
 
+For seller-oriented or more security-sensitive deployments, prefer keeping secrets in `SSM Parameter Store` `SecureString` parameters instead of passing them directly as `CloudFormation` parameter values.
+
 Recommended lookup commands:
 
 - profile list: [AWS Commands Cheatsheet](commands-cheatsheet.md#caller-identity)
@@ -306,6 +308,48 @@ aws cloudformation create-stack \
 
 </details>
 
+If you want to avoid passing the Penpot secret directly through `CloudFormation`, create an `SSM SecureString` parameter first and pass its name instead:
+
+<details>
+<summary>Show SSM parameter create command</summary>
+
+```bash
+aws ssm put-parameter \
+  --region "$AWS_REGION" \
+  --name "/penpot/$AWS_STACK_NAME/secret-key" \
+  --type SecureString \
+  --value "$(openssl rand -hex 32)"
+```
+
+</details>
+
+Then reference it in the stack request:
+
+<details>
+<summary>Show create-stack command with SSM secret key</summary>
+
+```bash
+aws cloudformation create-stack \
+  --region "$AWS_REGION" \
+  --stack-name "$AWS_STACK_NAME" \
+  --template-body file://clouds/aws/cloudformation/penpot-single-node.yaml \
+  --capabilities CAPABILITY_IAM \
+  --parameters \
+    ParameterKey=AmiId,ParameterValue="$AWS_AMI_ID" \
+    ParameterKey=InstanceType,ParameterValue=t3.medium \
+    ParameterKey=RootVolumeSize,ParameterValue=20 \
+    ParameterKey=KeyName,ParameterValue="$AWS_KEY_NAME" \
+    ParameterKey=VpcId,ParameterValue="$AWS_VPC_ID" \
+    ParameterKey=SubnetId,ParameterValue="$AWS_SUBNET_ID" \
+    ParameterKey=SshCidr,ParameterValue="$AWS_SSH_CIDR" \
+    ParameterKey=DatabaseMode,ParameterValue=local \
+    ParameterKey=PenpotSecretKeySsmParameterName,ParameterValue="/penpot/$AWS_STACK_NAME/secret-key" \
+    ParameterKey=PenpotVersion,ParameterValue=<penpot-version> \
+    ParameterKey=DeploymentMode,ParameterValue=test
+```
+
+</details>
+
 If you want Penpot to use an external PostgreSQL server instead of the local container, switch `DatabaseMode` and add the required connection parameters:
 
 <details>
@@ -337,6 +381,11 @@ aws cloudformation create-stack \
 ```
 
 </details>
+
+The same pattern also works for:
+
+- `ExternalDatabasePasswordSsmParameterName`
+- `PenpotSmtpPasswordSsmParameterName`
 
 ## 9. Inspect Resources During Validation
 

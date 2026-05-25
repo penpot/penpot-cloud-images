@@ -54,14 +54,14 @@ locals {
 }
 
 source "amazon-ebs" "al2023" {
-  region                                = var.aws_region
-  instance_type                         = var.instance_type
-  ssh_username                          = "ec2-user"
-  ami_name                              = local.ami_name_value
-  vpc_id                                = var.vpc_id != "" ? var.vpc_id : null
-  subnet_id                             = var.subnet_id != "" ? var.subnet_id : null
-  associate_public_ip_address           = true
-  temporary_security_group_source_cidrs = ["0.0.0.0/0"]
+  region                                    = var.aws_region
+  instance_type                             = var.instance_type
+  ssh_username                              = "ec2-user"
+  ami_name                                  = local.ami_name_value
+  vpc_id                                    = var.vpc_id != "" ? var.vpc_id : null
+  subnet_id                                 = var.subnet_id != "" ? var.subnet_id : null
+  associate_public_ip_address               = true
+  temporary_security_group_source_public_ip = true
 
   tags = {
     Name         = local.ami_name_value
