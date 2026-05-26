@@ -7,10 +7,10 @@ Operational helper scripts for the current `AWS` delivery flow.
 ## Scripts
 
 - `resource-report.sh`
-  Lists the AWS resources currently associated with this project, including stacks, instances, AMIs, snapshots, and security groups.
+  Lists the AWS resources currently associated with this project, including stacks, instances, AMIs, snapshots, security groups, and matching `/penpot/` SSM parameters. If `HTTPS_TEST_VPC_ID` is set, it also shows the temporary HTTPS test network.
 
 - `cleanup.sh`
-  Cleans project resources in `AWS` and prints the state before and after cleanup.
+  Cleans project resources in `AWS`, removes matching `/penpot/` SSM parameters, and prints the state before and after cleanup. If `HTTPS_TEST_*` variables are set, it also attempts to remove the temporary HTTPS test network.
 
 - `validate.sh`
   Runs lightweight static validation for the AWS delivery assets without creating resources.

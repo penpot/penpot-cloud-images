@@ -423,7 +423,19 @@ Resources:
                 - Effect: Allow
                   Action:
                     - ssm:GetParameter
-                  Resource: "*"
+                  Resource:
+                    - !If
+                      - HasPenpotSecretKeySsmParameter
+                      - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${PenpotSecretKeySsmParameterName}"
+                      - !Ref AWS::NoValue
+                    - !If
+                      - HasExternalDatabasePasswordSsmParameter
+                      - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ExternalDatabasePasswordSsmParameterName}"
+                      - !Ref AWS::NoValue
+                    - !If
+                      - HasSmtpPasswordSsmParameter
+                      - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${PenpotSmtpPasswordSsmParameterName}"
+                      - !Ref AWS::NoValue
           - !Ref AWS::NoValue
       Tags:
         - Key: Name

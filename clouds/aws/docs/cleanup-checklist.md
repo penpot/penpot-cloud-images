@@ -36,6 +36,8 @@ This lists:
 - tagged AMIs
 - tagged snapshots
 - tagged security groups
+- matching `/penpot/` SSM parameters for the project
+- optional HTTPS test VPC/subnets when `HTTPS_TEST_VPC_ID` is set
 
 ### Cleanup
 
@@ -53,7 +55,9 @@ This script:
 4. deregisters tagged AMIs
 5. deletes tagged snapshots
 6. attempts to delete tagged security groups
-7. prints an `after` report
+7. deletes matching `/penpot/` SSM parameters
+8. optionally deletes the HTTPS test network when `HTTPS_TEST_*` variables are set
+9. prints an `after` report
 
 ## Safety Model
 
