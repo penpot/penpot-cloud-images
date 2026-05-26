@@ -82,6 +82,7 @@ Compatibility behavior:
 
 - if the `...SsmParameterName` value is provided, the instance resolves the secret at boot with `aws ssm get-parameter --with-decryption`
 - if the `...SsmParameterName` value is empty, the template keeps using the existing inline secret parameter
+- the referenced parameter must exist in the same `AWS` account and region as the stack because instance access is scoped to the specific parameter ARN
 
 This keeps the current flow working while giving you a cleaner path for Marketplace-oriented deployments.
 

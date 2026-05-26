@@ -310,6 +310,8 @@ aws cloudformation create-stack \
 
 If you want to avoid passing the Penpot secret directly through `CloudFormation`, create an `SSM SecureString` parameter first and pass its name instead:
 
+The referenced `SSM` parameter must exist in the same `AWS` account and region as the stack. The instance role only gets `ssm:GetParameter` on the specific parameter ARNs passed through the stack inputs.
+
 <details>
 <summary>Show SSM parameter create command</summary>
 
