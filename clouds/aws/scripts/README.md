@@ -15,6 +15,9 @@ Operational helper scripts for the current `AWS` delivery flow.
 - `validate.sh`
   Runs lightweight static validation for the AWS delivery assets without creating resources.
 
+- `validate-https-e2e.sh`
+  Runs a temporary end-to-end HTTPS validation flow: build AMI, create SSM secret, deploy `https-alb`, smoke test HTTPS with SNI against the ALB, and clean up all temporary resources on exit.
+
 ## Typical Usage
 
 ```bash
@@ -22,4 +25,5 @@ AWS_PROFILE=<profile> ./clouds/aws/scripts/resource-report.sh
 AWS_PROFILE=<profile> ./clouds/aws/scripts/cleanup.sh
 bash ./clouds/aws/scripts/validate.sh
 bash ./clouds/aws/scripts/validate.sh --help
+AWS_PROFILE=<profile> bash ./clouds/aws/scripts/validate-https-e2e.sh --help
 ```

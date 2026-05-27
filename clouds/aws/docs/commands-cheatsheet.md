@@ -109,6 +109,12 @@ AWS_PROFILE=<profile> ./clouds/aws/scripts/resource-report.sh
 AWS_PROFILE=<profile> ./clouds/aws/scripts/cleanup.sh
 ```
 
+## HTTPS End-To-End Validation
+
+```bash
+AWS_PROFILE=<profile> bash ./clouds/aws/scripts/validate-https-e2e.sh --create-network
+```
+
 ## SSM SecureString Secret
 
 ```bash
