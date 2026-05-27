@@ -6,7 +6,6 @@ COMPOSE_BIN="docker-compose-linux-x86_64"
 COMPOSE_DOWNLOAD_URL="https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/${COMPOSE_BIN}"
 COMPOSE_CHECKSUM_URL="https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/checksums.txt"
 
-sudo dnf update -y
 sudo dnf install -y docker
 sudo mkdir -p /usr/local/lib/docker/cli-plugins
 curl -fsSL "${COMPOSE_DOWNLOAD_URL}" -o /tmp/docker-compose

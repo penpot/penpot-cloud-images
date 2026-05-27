@@ -90,10 +90,100 @@ log() {
   printf '%s\n' "$*"
 }
 
+wait_for_target_group_healthy() {
+  local target_group_arn="$1"
+  local attempts="${2:-30}"
+  local sleep_seconds="${3:-10}"
+  local attempt=1
+  local target_state
+  local target_state_output
+  local target_state_status
+
+  while (( attempt <= attempts )); do
+    set +e
+    target_state_output="$(
+      aws_cmd elbv2 describe-target-health \
+        --target-group-arn "${target_group_arn}" \
+        --query 'TargetHealthDescriptions[0].TargetHealth.State' \
+        --output text 2>&1
+    )"
+    target_state_status=$?
+    set -e
+
+    if (( target_state_status != 0 )); then
+      log "Target health query failed (${attempt}/${attempts}): ${target_state_output}"
+      sleep "${sleep_seconds}"
+      ((attempt++))
+      continue
+    fi
+
+    target_state="${target_state_output}"
+
+    if [[ "${target_state}" == "healthy" ]]; then
+      return 0
+    fi
+
+    log "Target group state: ${target_state} (${attempt}/${attempts})"
+    sleep "${sleep_seconds}"
+    ((attempt++))
+  done
+
+  log "Target group did not become healthy after ${attempts} attempts"
+  return 1
+}
+
+wait_for_https_smoke_test() {
+  local domain_name="$1"
+  local alb_dns_name="$2"
+  local attempts="${3:-12}"
+  local sleep_seconds="${4:-10}"
+  local attempt=1
+
+  while (( attempt <= attempts )); do
+    if curl \
+      --fail \
+      --silent \
+      --show-error \
+      --head \
+      --connect-to "${domain_name}:443:${alb_dns_name}:443" \
+      "https://${domain_name}/" >/dev/null; then
+      return 0
+    fi
+
+    log "HTTPS smoke test not ready yet (${attempt}/${attempts})"
+    sleep "${sleep_seconds}"
+    ((attempt++))
+  done
+
+  log "HTTPS smoke test did not succeed after ${attempts} attempts"
+  return 1
+}
+
+wait_for_dns_resolution() {
+  local dns_name="$1"
+  local attempts="${2:-18}"
+  local sleep_seconds="${3:-10}"
+  local attempt=1
+
+  while (( attempt <= attempts )); do
+    if [[ -n "$(dig +short "${dns_name}")" ]]; then
+      return 0
+    fi
+
+    log "ALB DNS not resolving yet (${attempt}/${attempts})"
+    sleep "${sleep_seconds}"
+    ((attempt++))
+  done
+
+  log "ALB DNS did not resolve after ${attempts} attempts"
+  return 1
+}
+
 CLEANUP_STACK=true
 CLEANUP_AMI=true
 CLEANUP_SSM=true
 CLEANUP_NETWORK=false
+VALIDATION_SUCCEEDED=false
 AWS_AMI_ID=""
 AWS_STACK_NAME=""
 PENPOT_SECRET_SSM_PARAM=""
@@ -103,11 +193,61 @@ HTTPS_TEST_SUBNET_ID_A=""
 HTTPS_TEST_SUBNET_ID_B=""
 HTTPS_TEST_IGW_ID=""
 HTTPS_TEST_ROUTE_TABLE_ID=""
+INSTANCE_ID=""
+ALB_DNS_NAME=""
+TARGET_GROUP_ARN=""
 VALIDATION_ID="$(date +%Y%m%d%H%M%S)"
-BUILD_VARIANT="${BUILD_VARIANT:-https-e2e-${VALIDATION_ID}}"
+BUILD_VARIANT_BASE="${BUILD_VARIANT:-https-e2e}"
+BUILD_VARIANT="${BUILD_VARIANT_BASE}-${VALIDATION_ID}"
+
+collect_failure_diagnostics() {
+  local ssm_payload
+  local command_id
+
+  if [[ -n "${TARGET_GROUP_ARN}" ]]; then
+    log "Failure diagnostic: target group health"
+    aws_cmd elbv2 describe-target-health --target-group-arn "${TARGET_GROUP_ARN}" || true
+  fi
+
+  if [[ -n "${ALB_DNS_NAME}" ]]; then
+    log "Failure diagnostic: ALB DNS resolution"
+    dig +short "${ALB_DNS_NAME}" || true
+  fi
+
+  if [[ -n "${INSTANCE_ID}" ]]; then
+    log "Failure diagnostic: collecting instance state through SSM"
+    ssm_payload="$(mktemp)"
+    cat >"${ssm_payload}" <<'EOF'
+{
+  "commands": [
+    "sudo systemctl status penpot-compose --no-pager",
+    "sudo journalctl -u penpot-compose -n 80 --no-pager",
+    "sudo journalctl -u nginx -n 80 --no-pager",
+    "curl -I http://localhost/",
+    "docker ps --format \"{{.Names}} {{.Status}}\""
+  ]
+}
+EOF
+    command_id="$(
+      aws_cmd ssm send-command \
+        --instance-ids "${INSTANCE_ID}" \
+        --document-name AWS-RunShellScript \
+        --parameters "file://${ssm_payload}" \
+        --query 'Command.CommandId' \
+        --output text
+    )"
+    aws_cmd ssm wait command-executed --command-id "${command_id}" --instance-id "${INSTANCE_ID}" || true
+    aws_cmd ssm get-command-invocation --command-id "${command_id}" --instance-id "${INSTANCE_ID}" || true
+    rm -f "${ssm_payload}"
+  fi
+}
 
 cleanup() {
   set +e
+
+  if [[ "${VALIDATION_SUCCEEDED}" != "true" ]]; then
+    collect_failure_diagnostics
+  fi
 
   if [[ "${CLEANUP_STACK}" == "true" && -n "${AWS_STACK_NAME}" ]]; then
     log
@@ -169,6 +309,7 @@ trap cleanup EXIT
 require_cmd aws
 require_cmd bash
 require_cmd curl
+require_cmd dig
 require_cmd packer
 require_cmd sed
 require_cmd openssl
@@ -335,20 +476,40 @@ ALB_DNS_NAME="$(
     --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDnsName`].OutputValue' \
     --output text
 )"
+TARGET_GROUP_ARN="$(
+  aws_cmd cloudformation describe-stack-resources \
+    --stack-name "${AWS_STACK_NAME}" \
+    --logical-resource-id PenpotTargetGroup \
+    --query 'StackResources[0].PhysicalResourceId' \
+    --output text
+)"
+INSTANCE_ID="$(
+  aws_cmd cloudformation describe-stack-resources \
+    --stack-name "${AWS_STACK_NAME}" \
+    --query 'StackResources[?ResourceType==`AWS::EC2::Instance`].PhysicalResourceId' \
+    --output text
+)"
 
 if [[ -z "${ALB_DNS_NAME}" ]]; then
   echo "failed to resolve LoadBalancerDnsName from stack outputs" >&2
   exit 1
 fi
 
+if [[ -z "${TARGET_GROUP_ARN}" || "${TARGET_GROUP_ARN}" == "None" ]]; then
+  echo "failed to resolve target group ARN from stack resources" >&2
+  exit 1
+fi
+
+log "Waiting for ALB target to become healthy"
+wait_for_target_group_healthy "${TARGET_GROUP_ARN}" 60 10
+
+log "Waiting for ALB DNS to resolve"
+wait_for_dns_resolution "${ALB_DNS_NAME}" 18 10
+
 log "Running HTTPS smoke test against ALB"
-curl \
-  --fail \
-  --silent \
-  --show-error \
-  --head \
-  --connect-to "${DOMAIN_NAME}:443:${ALB_DNS_NAME}:443" \
-  "https://${DOMAIN_NAME}/" >/dev/null
+wait_for_https_smoke_test "${DOMAIN_NAME}" "${ALB_DNS_NAME}" 18 10
+
+VALIDATION_SUCCEEDED=true
 
 log
 log "HTTPS end-to-end validation passed"
