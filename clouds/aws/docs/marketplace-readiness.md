@@ -91,6 +91,92 @@ Release procedure:
 
 Treat that `AMI` as the release handoff for the next seller step.
 
+## Publication Package
+
+The current publication package for this repository is:
+
+- product shape: `AMI with CloudFormation`
+- source `AMI`: the artifact produced by `.github/workflows/aws-marketplace-ami-release.yml` in `us-east-1`
+- publication template: `clouds/aws/cloudformation/penpot-single-node.yaml`
+
+## Official Customer Deployment Path
+
+Treat this as the default customer-facing deployment path for the Marketplace package:
+
+- `AccessMode=https-alb`
+- `PenpotPublicUri=""`
+- `DeploymentMode=production`
+- `DatabaseMode=local`
+- `ValkeyMode=local`
+- `PenpotSecretKeySsmParameterName` backed by `SSM Parameter Store SecureString`
+
+Customer prerequisites for this path:
+
+- one `VPC`
+- two public subnets in different Availability Zones
+- one `EC2` key pair
+- one public `DomainName`
+- one `ACM` certificate in the same region
+- one DNS record pointing the customer hostname to the `ALB`
+
+This path is the closest thing to the current first-class customer deployment flow. Other options in the template remain useful, but they should be treated as advanced variants unless explicitly elevated later.
+
+## Publication Template Parameters
+
+### Required for the official deployment path
+
+- `AmiId`
+- `KeyName`
+- `VpcId`
+- `SubnetId`
+- `LoadBalancerSubnetId`
+- `SshCidr`
+- `AccessMode=https-alb`
+- `PenpotVersion`
+- `DomainName`
+- `AcmCertificateArn`
+- `PenpotSecretKeySsmParameterName`
+
+### Recommended defaults for the official deployment path
+
+- `InstanceType=t3.medium`
+- `RootVolumeSize=20` or larger if you want more Docker/runtime headroom
+- `PenpotPublicUri=""`
+- `DeploymentMode=production`
+- `DatabaseMode=local`
+- `ValkeyMode=local`
+- `PenpotEnableSmtp=false`
+
+### Optional advanced parameters
+
+- `ExternalDatabaseHost`
+- `ExternalDatabasePort`
+- `ExternalDatabaseName`
+- `ExternalDatabaseUsername`
+- `ExternalDatabasePassword`
+- `ExternalDatabasePasswordSsmParameterName`
+- `ExternalValkeyUri`
+- `PenpotEnableSmtp`
+- `PenpotSmtpDefaultFrom`
+- `PenpotSmtpDefaultReplyTo`
+- `PenpotSmtpHost`
+- `PenpotSmtpPort`
+- `PenpotSmtpUsername`
+- `PenpotSmtpPassword`
+- `PenpotSmtpPasswordSsmParameterName`
+- `PenpotSmtpTls`
+- `PenpotSmtpSsl`
+
+## Submission Handoff
+
+For a real Marketplace submission, the minimum handoff from the repository side is:
+
+- the source `AMI` ID built in `us-east-1`
+- the final `CloudFormation` template path
+- the official customer deployment path above
+- the required and recommended parameter set above
+- the seller gap status below, so it is clear what is still commercial or operational rather than infrastructure-related
+
 ## Seller Gap Status
 
 Status legend:
