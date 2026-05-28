@@ -6,6 +6,8 @@ This repository already builds and deploys a working `single-node` Penpot image 
 
 Use this document when preparing an `AMI-based` AWS Marketplace product backed by the assets in this repository.
 
+For an execution-oriented follow-up checklist, see [Seller Delivery Checklist](seller-delivery-checklist.md).
+
 The current fit is:
 
 - `AMI with CloudFormation`
@@ -29,6 +31,7 @@ What is new for seller preparation:
   - `PenpotSecretKey`
   - `ExternalDatabasePassword`
   - `PenpotSmtpPassword`
+- automated `HTTPS` end-to-end validation script: `clouds/aws/scripts/validate-https-e2e.sh`
 
 ## Marketplace Source AMI Constraint
 
@@ -67,6 +70,34 @@ After the source AMI build is working, the next seller tasks are outside the cur
 - prepare listing text, support details, and pricing
 - submit the source AMI and template for Marketplace review
 - decide whether publication stays manual or moves to `Catalog API`
+
+## Seller Technical Baseline
+
+Before treating the current `single-node` flow as seller-ready enough for Marketplace-oriented iteration, keep these technical checks green:
+
+- `https-alb` deployment path works end-to-end
+- secrets can be supplied through `SSM Parameter Store` instead of inline `CloudFormation` values
+- instance IAM is limited to the specific secret parameter ARNs passed through the stack
+- cleanup leaves no active validation resources behind
+- the `HTTPS` validation flow is reproducible from a single command
+
+The repository now has an executable baseline for that last point:
+
+```bash
+AWS_PROFILE=<profile> bash ./clouds/aws/scripts/validate-https-e2e.sh --create-network
+```
+
+What this validates:
+
+- temporary HTTPS network creation
+- temporary `AMI` build
+- temporary `SSM` secret creation
+- temporary `CloudFormation` deployment in `https-alb` mode
+- target health recovery behind the `ALB`
+- external `HTTPS` reachability using the intended hostname and `SNI`
+- full cleanup of temporary stack, secret, `AMI`, snapshot, and network
+
+This is not the Marketplace publication workflow itself. It is the current technical confidence gate for the seller path.
 
 ## Recommended Secret Handling
 

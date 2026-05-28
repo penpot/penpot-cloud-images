@@ -14,6 +14,7 @@ AWS-specific assets for building and deploying Penpot in AWS.
 - [single-node.pkr.hcl](packer/single-node.pkr.hcl): main `Packer` template for the AWS image build
 - [penpot-single-node.yaml](cloudformation/penpot-single-node.yaml): main `CloudFormation` template for the current deployment flow
 - [validate.sh](scripts/validate.sh): lightweight validation entry point for the AWS assets
+- [validate-https-e2e.sh](scripts/validate-https-e2e.sh): end-to-end `HTTPS` validation entry point with temporary resource cleanup
 
 ## Documentation
 
@@ -21,3 +22,4 @@ AWS-specific assets for building and deploying Penpot in AWS.
 - [Cleanup Checklist](docs/cleanup-checklist.md)
 - [Commands Cheatsheet](docs/commands-cheatsheet.md)
 - [Marketplace Readiness](docs/marketplace-readiness.md)
+- [Seller Delivery Checklist](docs/seller-delivery-checklist.md)
