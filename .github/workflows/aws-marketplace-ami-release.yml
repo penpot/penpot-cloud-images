@@ -27,13 +27,13 @@ jobs:
       BUILD_VARIANT: ${{ inputs.build_variant }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Packer
         uses: hashicorp/setup-packer@main
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
@@ -62,7 +62,7 @@ jobs:
 
       - name: Resolve Penpot release tag
         id: penpot_release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const override = process.env.PENPOT_RELEASE_VERSION;

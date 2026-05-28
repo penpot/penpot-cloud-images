@@ -123,6 +123,8 @@ This path is the closest thing to the current first-class customer deployment fl
 
 ## Publication Template Parameters
 
+For `v1`, treat the following as the intended customer surface. Everything else should be considered advanced unless later promoted explicitly.
+
 ### Required for the official deployment path
 
 - `AmiId`
