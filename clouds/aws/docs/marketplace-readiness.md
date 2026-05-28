@@ -6,8 +6,6 @@ This repository already builds and deploys a working `single-node` Penpot image 
 
 Use this document when preparing an `AMI-based` AWS Marketplace product backed by the assets in this repository.
 
-For an execution-oriented follow-up checklist, see [Seller Delivery Checklist](seller-delivery-checklist.md).
-
 The current fit is:
 
 - `AMI with CloudFormation`
@@ -60,6 +58,105 @@ AWS_MARKETPLACE_SOURCE_REGION=us-east-1
 ```
 
 The Marketplace workflow fails fast if the effective source region is not `us-east-1`.
+
+## Canonical Source AMI Release Flow
+
+Use the dedicated GitHub Actions workflow:
+
+- `.github/workflows/aws-marketplace-ami-release.yml`
+
+This is the canonical seller release flow for producing the source `AMI` intended for `AWS Marketplace`.
+
+Scope of this flow:
+
+- build the Marketplace source `AMI`
+- produce the source `AMI` ID to carry into Marketplace registration or submission
+
+This flow does not cover:
+
+- listing content
+- pricing
+- support policy
+- final submission in the Marketplace Management Portal
+
+Release procedure:
+
+1. confirm the Marketplace build network exists in `us-east-1`
+2. confirm the required repository variables and secret are set
+3. trigger `AWS Marketplace Source AMI Release` with optional inputs:
+   - `penpot_release_version`
+   - `build_variant`
+4. wait for the workflow to complete successfully
+5. record the resulting source `AMI` ID from the job summary
+
+Treat that `AMI` as the release handoff for the next seller step.
+
+## Seller Gap Status
+
+Status legend:
+
+- `Done`: covered in the repository and already validated
+- `Partial`: present, but still needs tightening or explicit closure
+- `Missing`: still outside the current repository closure
+
+### 1. Technical Baseline
+
+Status: `Done`
+
+- `validate-https-e2e.sh` passes in a disposable test account or test environment
+- `https-alb` is the reference access mode for seller-oriented validation
+- `SSM Parameter Store` secrets are used instead of inline secret values
+- cleanup leaves no active `EC2`, `ALB`, `AMI`, snapshot, `SSM`, or test-network resources behind
+- the `CloudFormation` template validates cleanly
+
+### 2. Release Inputs
+
+Status: `Done`
+
+- source `AMI` build path is prepared for `us-east-1`
+- seller release variables are defined for the Marketplace workflow
+- the image versioning scheme is stable and traceable
+- the Marketplace source `AMI` can be identified without ambiguity
+- the canonical seller release flow is documented in this file
+
+### 3. Customer-Facing Stack Shape
+
+Status: `Partial`
+
+- required deployment inputs are documented clearly
+- recommended defaults are documented for a first deployment
+- `HTTPS` deployment is documented as the primary path
+- secret handling guidance uses `SSM Parameter Store`
+- cleanup and rollback steps are documented for operators
+
+What is still missing here:
+
+- one clearly identified customer-facing deployment path, rather than a repo-internal operator perspective
+- a final pass on which inputs are required, optional, and recommended for a first customer deployment
+
+### 4. Marketplace Submission Assets
+
+Status: `Missing`
+
+- product description draft exists
+- support contact and escalation path are defined
+- pricing approach is decided
+- listing screenshots or supporting visuals are prepared if needed
+- the final `CloudFormation` template intended for submission is identified
+
+### 5. Operational Confidence
+
+Status: `Partial`
+
+- a repeatable pre-release validation runbook exists
+- a release owner is defined for Marketplace pushes
+- the team knows which steps stay manual and which are automated
+- failure logs from the validation flow are understandable without re-debugging the script
+
+What is still missing here:
+
+- named ownership for Marketplace release execution
+- one short runbook that distinguishes validation, release, and submission responsibilities
 
 ## Manual Seller Checklist For The Next Phase
 
@@ -126,3 +223,14 @@ The Marketplace workflow is intentionally separate so that:
 - the current regional test flow is not broken
 - seller-specific inputs stay explicit
 - the repository can evolve toward publication without forcing all builds through `us-east-1`
+
+## Definition Of Done
+
+Treat the repository as `seller-ready technical` when all of this is true:
+
+- the technical baseline stays `Done`
+- release inputs stay `Done`
+- customer-facing stack shape is promoted from `Partial` to `Done`
+- operational confidence is promoted from `Partial` to `Done`
+
+Treat the repository as ready for full `AWS Marketplace publication` only when the Marketplace submission assets are also closed.

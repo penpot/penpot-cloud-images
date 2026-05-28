@@ -22,4 +22,3 @@ AWS-specific assets for building and deploying Penpot in AWS.
 - [Cleanup Checklist](docs/cleanup-checklist.md)
 - [Commands Cheatsheet](docs/commands-cheatsheet.md)
 - [Marketplace Readiness](docs/marketplace-readiness.md)
-- [Seller Delivery Checklist](docs/seller-delivery-checklist.md)
