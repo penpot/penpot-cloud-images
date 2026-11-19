@@ -18,6 +18,8 @@ done
 
 PENPOT_DATABASE_MODE="${PENPOT_DATABASE_MODE:-local}"
 PENPOT_VALKEY_MODE="${PENPOT_VALKEY_MODE:-local}"
+PENPOT_ENABLE_MCP="${PENPOT_ENABLE_MCP:-false}"
+PENPOT_MCP_FEEDBACK_EMAIL="${PENPOT_MCP_FEEDBACK_EMAIL:-}"
 COMPOSE_PROFILE_LIST=()
 
 case "${PENPOT_DATABASE_MODE}" in
@@ -71,6 +73,45 @@ case "${PENPOT_VALKEY_MODE}" in
     ;;
 esac
 
+case "${PENPOT_ENABLE_MCP,,}" in
+  true|1|yes)
+    PENPOT_ENABLE_MCP=true
+    COMPOSE_PROFILE_LIST+=(mcp)
+    PENPOT_FLAGS="${PENPOT_FLAGS:-enable-prepl-server}"
+    if [[ " ${PENPOT_FLAGS} " != *" enable-mcp "* ]]; then
+      PENPOT_FLAGS="${PENPOT_FLAGS} enable-mcp"
+    fi
+    PENPOT_MCP_AUTH_URI="${PENPOT_PUBLIC_URI%/}/api/mcp/oauth"
+    if [[ -n "${PENPOT_MCP_FEEDBACK_EMAIL}" ]]; then
+      PENPOT_MCP_BACKEND_URI="${PENPOT_MCP_BACKEND_URI:-http://penpot-backend:6060/}"
+    else
+      PENPOT_MCP_BACKEND_URI=""
+    fi
+    ;;
+  false|0|no)
+    PENPOT_ENABLE_MCP=false
+    PENPOT_MCP_AUTH_URI=""
+    PENPOT_MCP_BACKEND_URI=""
+    if [[ " ${PENPOT_FLAGS:-} " == *" enable-mcp "* ]]; then
+      echo "remove enable-mcp from PENPOT_FLAGS or set PENPOT_ENABLE_MCP=true" >&2
+      exit 1
+    fi
+    if [[ -n "${PENPOT_MCP_FEEDBACK_EMAIL}" ]]; then
+      echo "PENPOT_MCP_FEEDBACK_EMAIL requires PENPOT_ENABLE_MCP=true" >&2
+      exit 1
+    fi
+    ;;
+  *)
+    echo "unsupported PENPOT_ENABLE_MCP: ${PENPOT_ENABLE_MCP}" >&2
+    exit 1
+    ;;
+esac
+
+if [[ -n "${PENPOT_MCP_FEEDBACK_EMAIL}" && " ${PENPOT_FLAGS} " != *" enable-smtp "* ]]; then
+  echo "PENPOT_MCP_FEEDBACK_EMAIL requires SMTP to be enabled" >&2
+  exit 1
+fi
+
 COMPOSE_PROFILES="$(IFS=,; echo "${COMPOSE_PROFILE_LIST[*]}")"
 
 cat > "${ENV_FILE}" <<EOF
@@ -79,6 +120,10 @@ PENPOT_PUBLIC_URI="${PENPOT_PUBLIC_URI}"
 PENPOT_SECRET_KEY="${PENPOT_SECRET_KEY}"
 PENPOT_DATABASE_MODE="${PENPOT_DATABASE_MODE}"
 PENPOT_FLAGS="${PENPOT_FLAGS:-enable-prepl-server}"
+PENPOT_ENABLE_MCP="${PENPOT_ENABLE_MCP}"
+PENPOT_MCP_AUTH_URI="${PENPOT_MCP_AUTH_URI}"
+PENPOT_MCP_BACKEND_URI="${PENPOT_MCP_BACKEND_URI}"
+PENPOT_MCP_FEEDBACK_EMAIL="${PENPOT_MCP_FEEDBACK_EMAIL}"
 PENPOT_VALKEY_MODE="${PENPOT_VALKEY_MODE}"
 PENPOT_HTTP_SERVER_MAX_BODY_SIZE="${PENPOT_HTTP_SERVER_MAX_BODY_SIZE:-367001600}"
 PENPOT_HTTP_SERVER_MAX_MULTIPART_BODY_SIZE="${PENPOT_HTTP_SERVER_MAX_MULTIPART_BODY_SIZE:-367001600}"

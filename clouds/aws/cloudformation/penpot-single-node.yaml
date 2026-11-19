@@ -25,6 +25,8 @@ Metadata:
           - PenpotVersion
           - DeploymentMode
           - DatabaseMode
+          - PenpotEnableMcp
+          - PenpotMcpFeedbackEmail
       - Label:
           default: HTTPS Configuration
         Parameters:
@@ -84,6 +86,10 @@ Metadata:
         default: Penpot Secret Key SSM Parameter
       PenpotVersion:
         default: Penpot Version
+      PenpotEnableMcp:
+        default: Enable Penpot MCP
+      PenpotMcpFeedbackEmail:
+        default: MCP Feedback Email
       DeploymentMode:
         default: Deployment Mode
       DatabaseMode:
@@ -203,6 +209,19 @@ Parameters:
   PenpotVersion:
     Type: String
     Description: Penpot container image version to deploy. This parameter is required.
+
+  PenpotEnableMcp:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Run the Penpot MCP service and enable its authenticated endpoints
+
+  PenpotMcpFeedbackEmail:
+    Type: String
+    Default: ""
+    Description: Optional email inbox for MCP feedback. Requires MCP and SMTP to be enabled.
 
   DeploymentMode:
     Type: String
@@ -381,6 +400,18 @@ Rules:
           - !Not [!Equals [!Ref PenpotSmtpPassword, ""]]
           - !Not [!Equals [!Ref PenpotSmtpPasswordSsmParameterName, ""]]
         AssertDescription: PenpotSmtpPassword or PenpotSmtpPasswordSsmParameterName must be provided when SMTP is enabled
+  McpFeedbackSettingsRequireMcpAndSmtp:
+    RuleCondition: !Not [!Equals [!Ref PenpotMcpFeedbackEmail, ""]]
+    Assertions:
+      - Assert: !Equals [!Ref PenpotEnableMcp, "true"]
+        AssertDescription: PenpotEnableMcp must be true when PenpotMcpFeedbackEmail is set
+      - Assert: !Equals [!Ref PenpotEnableSmtp, "true"]
+        AssertDescription: PenpotEnableSmtp must be true when PenpotMcpFeedbackEmail is set
+  McpRequiresHttps:
+    RuleCondition: !Equals [!Ref PenpotEnableMcp, "true"]
+    Assertions:
+      - Assert: !Equals [!Ref AccessMode, https-alb]
+        AssertDescription: PenpotEnableMcp requires AccessMode=https-alb so OAuth uses HTTPS
   ExternalDatabaseSettingsRequiredWhenEnabled:
     RuleCondition: !Equals [!Ref DatabaseMode, external]
     Assertions:
@@ -592,6 +623,8 @@ Resources:
               export PENPOT_VERSION='${PenpotVersion}'
               export PENPOT_DATABASE_MODE='${DatabaseMode}'
               export PENPOT_VALKEY_MODE='${ValkeyMode}'
+              export PENPOT_ENABLE_MCP='${PenpotEnableMcp}'
+              export PENPOT_MCP_FEEDBACK_EMAIL='${PenpotMcpFeedbackEmail}'
               export PENPOT_FLAGS=''
               if [[ '${DeploymentMode}' == 'test' ]]; then
                 export PENPOT_FLAGS='disable-email-verification'

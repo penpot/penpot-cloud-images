@@ -19,6 +19,7 @@ AWS-specific assets for building and deploying Penpot in AWS.
 ## Documentation
 
 - [Execution Guide](docs/execution-guide.md)
+- [MCP Support](docs/mcp-support.md)
 - [Cleanup Checklist](docs/cleanup-checklist.md)
 - [Commands Cheatsheet](docs/commands-cheatsheet.md)
 - [Marketplace Readiness](docs/marketplace-readiness.md)
