@@ -224,11 +224,11 @@ What is still missing here:
 
 ### 4. Marketplace Submission Assets
 
-Status: `Missing`
+Status: `Partial`
 
-- product description draft exists
+- product description is approved
 - support contact and escalation path are defined
-- pricing approach is decided
+- pricing approach is decided: `Free` with no software charge
 - listing screenshots or supporting visuals are prepared if needed
 - the final `CloudFormation` template intended for submission is identified
 
@@ -252,7 +252,8 @@ After the source AMI build is working, the next seller tasks are outside the cur
 
 - register or configure the seller account in `AWS Marketplace Management Portal`
 - create the product as `AMI with CloudFormation`
-- prepare listing text, support details, and pricing
+- add the approved listing text and `Free` pricing model
+- confirm support details
 - submit the source AMI and template for Marketplace review
 - decide whether publication stays manual or moves to `Catalog API`
 
